@@ -18,8 +18,10 @@ into a real mobile app.
 - **Villages**: when enough people cluster, they found a named village
   (Wilwick, Kelholt, Bramley…) that grows houses and population over time.
   Every village owns a territory — a coloured border that grows with its
-  citizens — and every person belongs to a village (a coloured ring under
-  their feet shows which one). Citizens wander inside their own border;
+  citizens and stops at the halfway point to its nearest neighbour, so
+  two territories meet at their border but never overlap — and every
+  person belongs to a village (a coloured ring under their feet shows
+  which one). Citizens wander inside their own border;
   nomads who walk into a territory join that village, and children are
   born into their parent's village. Village names and citizen counts are
   drawn on the map.
