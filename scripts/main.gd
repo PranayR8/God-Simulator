@@ -62,6 +62,7 @@ func _ready() -> void:
 	villages.village_founded.connect(_on_village_founded)
 	villages.people_joined.connect(_on_people_joined)
 	villages.stage_changed.connect(_on_stage_changed)
+	villages.job_taken.connect(_on_job_taken)
 	event_log.changed.connect(_on_log_changed)
 	hud.tool_selected.connect(_on_tool_selected)
 	hud.brush_changed.connect(_on_brush_changed)
@@ -350,6 +351,9 @@ func _on_people_joined(village_name: String, count: int) -> void:
 
 func _on_stage_changed(village_name: String, old_stage: int, new_stage: int) -> void:
 	event_log.add_stage_change(day, village_name, Villages.STAGE_NAMES[new_stage], new_stage > old_stage)
+
+func _on_job_taken(village_name: String, job_name: String) -> void:
+	event_log.add_job(day, village_name, job_name)
 
 func _on_log_changed() -> void:
 	hud.update_log(event_log.entries)

@@ -121,6 +121,35 @@ func add_stage_change(day: int, village_name: String, stage_name: String, grew: 
 	else:
 		add(day, "%s fell back to a %s" % [village_name, stage_name])
 
+## A citizen took up a job (a village always has a name — nomads and
+## children don't work). Aggregated like births: several hires of the
+## same job in one village on one day become one line, or a growing
+## village would flood the log.
+func add_job(day: int, village_name: String, job_name: String) -> void:
+	if not entries.is_empty():
+		var last: Dictionary = entries[entries.size() - 1]
+		if String(last.get("kind", "")) == "job" \
+				and int(last.get("day", -1)) == day \
+				and String(last.get("village", "")) == village_name \
+				and String(last.get("job", "")) == job_name:
+			var count := int(last.get("count", 1)) + 1
+			last["count"] = count
+			last["text"] = _job_text(village_name, job_name, count)
+			changed.emit()
+			return
+	entries.append({
+		"day": day, "text": _job_text(village_name, job_name, 1), "kind": "job",
+		"village": village_name, "job": job_name, "count": 1,
+	})
+	_trim()
+	changed.emit()
+
+func _job_text(village_name: String, job_name: String, count: int) -> String:
+	var plural := job_name.to_lower() + "s"
+	if count == 1:
+		return "A %s took up work in %s" % [job_name.to_lower(), village_name]
+	return "%d %s took up work in %s" % [count, plural, village_name]
+
 func _trim() -> void:
 	while entries.size() > MAX_ENTRIES:
 		entries.pop_front()

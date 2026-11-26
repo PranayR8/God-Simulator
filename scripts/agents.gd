@@ -107,9 +107,84 @@ func tick(dt: float) -> void:
 				continue
 			_try_eat(a)
 		_move_agent(a, dt)
+		if a.kind == SimAgent.Kind.PERSON and a.job >= 0 and not a.is_child():
+			_do_job(a)
 		i += 1
 	_try_breed()
 	queue_redraw()
+
+## A citizen's work. Farmers tend the forest in the inner half of their
+## territory (one berry per 30 ticks — 4 a day, twice a tile's natural
+## regrowth, which is what makes a farmer worth more than the land
+## alone); woodcutters clear the forest at the outer edge (one tile per
+## day), so the forest edge near the village recedes while the tended
+## core stays fed. Builders need no per-tick work — each one raises the
+## house count (see Villages.house_count). A worker with nothing to do
+## (no forest in their half) just waits — they keep the job.
+func _do_job(a: SimAgent) -> void:
+	a.job_timer -= 1.0
+	if a.job_timer > 0.0:
+		return
+	if a.village < 0 or villages == null or a.village >= villages.villages.size():
+		return
+	var v: Villages.VillageData = villages.villages[a.village]
+	var radius := villages.territory_radius_px(v)
+	if a.job == SimAgent.JOB_FARMER:
+		a.job_timer = 30.0
+		_tend_forest_tile(v, radius * 0.5)
+	elif a.job == SimAgent.JOB_WOODCUTTER:
+		a.job_timer = 120.0
+		var t := _furthest_forest_tile(v, radius * 0.5, radius + 2.0 * GodSimWorld.TILE)
+		if t.x >= 0:
+			world.set_terrain(t.x, t.y, GodSimWorld.Terrain.GRASS)
+
+## A farmer tending: pick a forest tile in the inner half of the
+## territory that isn't fully grown and add one berry. Picking a forest
+## tile directly (instead of a random tile and hoping it's forest) is
+## what makes farmers actually feed a village — on open land with only
+## a few forest tiles, a random pick almost never lands on one.
+## Returns false when every forest tile in the inner half is full.
+func _tend_forest_tile(v: Villages.VillageData, max_r: float) -> bool:
+	var center := world.tile_to_world(v.tile.x, v.tile.y)
+	var r_tiles := int(ceil(max_r / GodSimWorld.TILE))
+	var candidates: Array[Vector2i] = []
+	for dy in range(-r_tiles, r_tiles + 1):
+		for dx in range(-r_tiles, r_tiles + 1):
+			var t := Vector2i(v.tile.x + dx, v.tile.y + dy)
+			if not world.in_bounds(t.x, t.y):
+				continue
+			if world.get_terrain(t.x, t.y) != GodSimWorld.Terrain.FOREST:
+				continue
+			if world.tile_to_world(t.x, t.y).distance_to(center) > max_r:
+				continue
+			if world.berries_at(t) < GodSimWorld.BERRY_MAX:
+				candidates.append(t)
+	if candidates.is_empty():
+		return false
+	return world.add_berry(candidates[_rng.randi_range(0, candidates.size() - 1)])
+
+## The forest tile furthest from the village centre inside the annulus
+## [min_r, max_r] — the forest edge, which is what a woodcutter clears.
+## Returns (-1,-1) when there is no forest in the ring.
+func _furthest_forest_tile(v: Villages.VillageData, min_r: float, max_r: float) -> Vector2i:
+	var center := world.tile_to_world(v.tile.x, v.tile.y)
+	var best := Vector2i(-1, -1)
+	var best_d := -1.0
+	var r_tiles := int(ceil(max_r / GodSimWorld.TILE))
+	for dy in range(-r_tiles, r_tiles + 1):
+		for dx in range(-r_tiles, r_tiles + 1):
+			var t := Vector2i(v.tile.x + dx, v.tile.y + dy)
+			if not world.in_bounds(t.x, t.y):
+				continue
+			if world.get_terrain(t.x, t.y) != GodSimWorld.Terrain.FOREST:
+				continue
+			var d := world.tile_to_world(t.x, t.y).distance_to(center)
+			if d < min_r or d > max_r:
+				continue
+			if d > best_d:
+				best_d = d
+				best = t
+	return best
 
 ## Hunger rises every tick; at max hunger, health drains. Returns true
 ## if the person starved to death (and removes them from the list).
@@ -355,6 +430,12 @@ func _draw_person(a: SimAgent) -> void:
 	# Head with a hair cap on top.
 	draw_circle(p + Vector2(0, -6) * sc, 3.6 * sc, skin)
 	draw_arc(p + Vector2(0, -6) * sc, 3.6 * sc, PI, TAU, 10, hair, 2.2 * sc)
+	# A working citizen wears their job: a small dot above the head and
+	# a trim stripe at the tunic hem, both in the job's color.
+	if a.job >= 0:
+		var jc: Color = SimAgent.JOB_COLORS[a.job]
+		draw_circle(p + Vector2(0, -12) * sc, 2.5 * sc, jc)
+		draw_line(p + Vector2(-6.5, 5) * sc, p + Vector2(6.5, 5) * sc, jc, 1.5 * sc)
 
 ## A sheep: fluffy white body, four dark legs, a dark head at the front
 ## (facing whichever way it is walking), a wool tuft and an ear.

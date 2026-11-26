@@ -86,6 +86,9 @@ signal people_joined(village_name: String, count: int)
 ## Village") so a hamlet becoming a town reads as an achievement.
 signal stage_changed(village_name: String, old_stage: int, new_stage: int)
 
+## A citizen took up a job (job_name is one of SimAgent.JOB_NAMES).
+signal job_taken(village_name: String, job_name: String)
+
 var _scan_counter := 0
 
 func clear_all() -> void:
@@ -104,6 +107,7 @@ func tick(current_day: int) -> void:
 		_try_found(current_day)
 		_assign_people()
 		_check_stages()
+		_assign_jobs()
 	queue_redraw()
 
 func _try_found(current_day: int) -> void:
@@ -358,7 +362,87 @@ func territory_radius_px(v: VillageData) -> float:
 	return float(territory_radius_tiles(v) * GodSimWorld.TILE)
 
 func house_count(v: VillageData) -> int:
-	return clampi(population_of(v) / POP_PER_HOUSE, 1, STAGE_HOUSE_CAPS[stage_of(v)])
+	# Builders raise the count by one each (up to the stage cap), so a
+	# village with builders gets its houses sooner — houses appear
+	# faster, which is the Builder's whole point.
+	return clampi(population_of(v) / POP_PER_HOUSE + builders_of(v), 1, STAGE_HOUSE_CAPS[stage_of(v)])
+
+## Builders among this village's citizens.
+func builders_of(v: VillageData) -> int:
+	if agents == null:
+		return 0
+	var idx := villages.find(v)
+	if idx < 0:
+		return 0
+	var n := 0
+	for a in agents.agents:
+		if a.kind == SimAgent.Kind.PERSON and a.village == idx and a.job == SimAgent.JOB_BUILDER:
+			n += 1
+	return n
+
+## Forest tiles inside this village's territory — the land its jobs
+## work with. Used to pick the job mix.
+func _forest_tiles_in_territory(v: VillageData) -> int:
+	if world == null:
+		return 0
+	var r := territory_radius_tiles(v)
+	var n := 0
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			if Vector2i(dx, dy).length() > float(r):
+				continue
+			var t := Vector2i(v.tile.x + dx, v.tile.y + dy)
+			if not world.in_bounds(t.x, t.y):
+				continue
+			if world.get_terrain(t.x, t.y) == GodSimWorld.Terrain.FOREST:
+				n += 1
+	return n
+
+## Give every adult citizen a job, based on what's nearby. Runs on the
+## same 8th-tick scan as founding and claiming. A villager picks the job
+## their village needs most: the target mix follows the forest inside
+## the territory — a village in the woods gets farmers to tend the food
+## and woodcutters to clear the edge, a village on open grass gets only
+## builders (there is nothing to farm or fell). Children don't work; a
+## child who grows up is hired at the next scan. A job is for life: when
+## a worker dies, the next unassigned adult fills the gap. Each hire is
+## logged (aggregated per job, village and day).
+func _assign_jobs() -> void:
+	if agents == null or world == null:
+		return
+	for vi in villages.size():
+		var v := villages[vi]
+		var forest := _forest_tiles_in_territory(v)
+		var targets := [0.4, 0.3, 0.3]
+		if forest < 8:
+			targets = [0.4, 0.2, 0.4]
+		if forest == 0:
+			targets = [0.0, 0.0, 1.0]
+		var counts := [0, 0, 0]
+		var adults := 0
+		for a in agents.agents:
+			if a.kind == SimAgent.Kind.PERSON and a.village == vi and not a.is_child():
+				adults += 1
+				if a.job >= 0:
+					counts[a.job] += 1
+		for a in agents.agents:
+			if a.kind != SimAgent.Kind.PERSON or a.village != vi or a.is_child() or a.job >= 0:
+				continue
+			# The most under-represented job, against its target share
+			# of the adult workforce.
+			var best := -1
+			var best_deficit := -INF
+			for j in 3:
+				var deficit := float(targets[j]) * float(adults) - float(counts[j])
+				if deficit > best_deficit:
+					best_deficit = deficit
+					best = j
+			if best < 0:
+				best = SimAgent.JOB_BUILDER
+			a.job = best
+			a.job_timer = 0.0
+			counts[best] += 1
+			job_taken.emit(v.name, SimAgent.JOB_NAMES[best])
 
 ## Where the houses stand. The built-up area spreads as the village
 ## grows: a golden-angle spiral out to a built-up radius that grows

@@ -15,7 +15,7 @@ func save_exists() -> bool:
 
 func save_game(world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog, day: int, ticks: int) -> bool:
 	var data := {
-		"version": 3,
+		"version": 4,
 		"seed": world.seed_value,
 		"day": day,
 		"ticks": ticks,
@@ -57,7 +57,7 @@ func _agents_to_data(agents: Agents) -> Array:
 		# are likewise stored for everyone (sheep keep 0, which they
 		# ignore) so a loaded world keeps its generations instead of
 		# resetting everyone to a newborn.
-		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan})
+		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job})
 	return out
 
 ## Berries as a flat list of [x, y, count] triples (only tiles that
@@ -112,6 +112,9 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		# _init instead of inventing a value.
 		if d.has("lifespan"):
 			na.lifespan = float(d.get("lifespan", 0.0))
+		# Old saves have no job — JOB_NONE, and the village hires them
+		# at the next scan.
+		na.job = int(d.get("job", -1))
 		agents.agents.append(na)
 	villages.clear_all()
 	for item in data.get("villages", []):

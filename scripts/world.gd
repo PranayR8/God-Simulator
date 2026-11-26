@@ -103,6 +103,20 @@ func eat_berry(tile: Vector2i) -> bool:
 	queue_redraw()
 	return true
 
+## A farmer tending a forest tile: add one berry, up to BERRY_MAX.
+## Returns false when the tile isn't forest or is already full.
+func add_berry(tile: Vector2i) -> bool:
+	if not in_bounds(tile.x, tile.y):
+		return false
+	if get_terrain(tile.x, tile.y) != Terrain.FOREST:
+		return false
+	var n := berries_at(tile)
+	if n >= BERRY_MAX:
+		return false
+	berries[tile] = n + 1
+	queue_redraw()
+	return true
+
 ## One simulation tick: berries regrow. Every BERRY_REGROW_TICKS, each
 ## forest tile below the maximum gains one berry.
 func tick() -> void:

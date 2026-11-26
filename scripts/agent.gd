@@ -50,6 +50,19 @@ const ELDER_SPEED_FACTOR := 0.6   # elders walk slower
 var lifespan: float = 0.0
 var shirt_color: Color = Color("#2980b9")
 var hair_color: Color = Color("#2c2118")
+## Jobs (Phase 5). A citizen's job: JOB_NONE = no job yet (children,
+## nomads, and anyone hired before jobs existed). Jobs are assigned by
+## the village (village.gd) and the work is done in agents.gd.
+## job_timer counts ticks until the next unit of work.
+const JOB_NONE := -1
+const JOB_FARMER := 0
+const JOB_WOODCUTTER := 1
+const JOB_BUILDER := 2
+const JOB_NAMES := ["Farmer", "Woodcutter", "Builder"]
+const JOB_COLORS := [Color("#27ae60"), Color("#8b5a2b"), Color("#7f8c8d")]
+var job: int = JOB_NONE
+var job_timer: float = 0.0
+
 var village: int = -1  # index into Villages.villages; -1 = no village yet (a nomad)
 
 func _init(p_kind: int, p_pos: Vector2) -> void:

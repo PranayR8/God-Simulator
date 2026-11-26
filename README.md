@@ -29,16 +29,15 @@ into a real mobile app.
   then dies of old age — the log says so, and births replace the dead,
   so the population settles at what the land can feed instead of
   climbing to the cap and freezing.
-- **Village growth stages**: villages grow up. At 6 citizens a place is
-  a Hamlet, at 15 a Village, at 30 a Town, at 60 a City — and you can
-  see it: the territory gets bigger, more and larger houses appear, a
-  stone wall ring goes up at Town, and a keep with the village flag at
-  City. The houses spread out as the village grows — the built-up area
-  widens with the population instead of piling every house at the
-  centre — so a City looks like a town spread across its land, not a
-  knot in the middle of an empty circle. The label shows the stage, and
-  the log records each promotion ("Wilwick became a Town"). A village
-  that loses people falls back down a stage, too.
+- **Jobs**: adult citizens take jobs based on what's nearby — Farmers
+  tend the forest around the village and grow food (a village with
+  farmers stops starving), Woodcutters clear the forest at the village's
+  edge (the forest visibly recedes), Builders raise houses faster. You
+  can tell who's doing what at a glance: a small dot above the head and
+  a trim on the tunic, green for farmers, brown for woodcutters, grey
+  for builders. Hires show up in the History ("A farmer took up work in
+  Wilwick"). A village on open grass gets only builders — there's
+  nothing to farm or fell.
   (Wilwick, Kelholt, Bramley…) that grows houses and population over time.
   Every village owns a territory — a coloured border that grows with its
   citizens and stops at the halfway point to its nearest neighbour, so
