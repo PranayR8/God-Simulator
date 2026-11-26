@@ -17,7 +17,12 @@ into a real mobile app.
   avoid water and mountains, and reproduce slowly when conditions are good.
 - **Villages**: when enough people cluster, they found a named village
   (Wilwick, Kelholt, Bramley…) that grows houses and population over time.
-  Village names are drawn on the map.
+  Every village owns a territory — a coloured border that grows with its
+  citizens — and every person belongs to a village (a coloured ring under
+  their feet shows which one). Citizens wander inside their own border;
+  nomads who walk into a territory join that village, and children are
+  born into their parent's village. Village names and citizen counts are
+  drawn on the map.
 - **Powers**: Rain (heals scorched land, grows forest), Lightning (kills
   creatures, scorches trees), Meteor (crater, kills in a radius).
 - **Simulation**: pause/play, 1×/2×/4× speed, tick-based. The HUD shows
@@ -39,7 +44,7 @@ scripts/
   world.gd             Grid data, procedural generation, terrain drawing
   agent.gd             One creature's data (person / sheep)
   agents.gd            Movement, breeding, drawing of all creatures
-  village.gd           Village founding, growth, names, drawing
+  village.gd           Village founding, growth, territories, citizens, drawing
   powers.gd            Rain / Lightning / Meteor effects
   save_system.gd       JSON save/load (user://world.json)
   hud.gd               Top bar, tool toolbar, buttons — signals only

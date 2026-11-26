@@ -45,6 +45,7 @@ var _last_paint_tile := Vector2i(-1, -1)
 func _ready() -> void:
 	# Wire the nodes together (each one keeps a reference to what it needs).
 	agents.world = world
+	agents.villages = villages
 	villages.world = world
 	villages.agents = agents
 	powers.world = world

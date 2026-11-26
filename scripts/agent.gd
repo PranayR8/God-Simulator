@@ -32,6 +32,7 @@ var breed_cooldown: float = 0.0  # ticks until this agent may breed again
 var age: float = 0.0  # age in ticks (unused in v1, kept for v2 ideas)
 var shirt_color: Color = Color("#2980b9")
 var hair_color: Color = Color("#2c2118")
+var village: int = -1  # index into Villages.villages; -1 = no village yet (a nomad)
 
 func _init(p_kind: int, p_pos: Vector2) -> void:
 	kind = p_kind

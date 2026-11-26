@@ -55,7 +55,7 @@ func _agents_to_data(agents: Agents) -> Array:
 func _villages_to_data(villages: Villages) -> Array:
 	var out: Array = []
 	for v in villages.villages:
-		out.append({"name": v.name, "x": v.tile.x, "y": v.tile.y, "day": v.founded_day})
+		out.append({"name": v.name, "x": v.tile.x, "y": v.tile.y, "day": v.founded_day, "color": v.color.to_html()})
 	return out
 
 ## Rebuild the world from loaded data. Returns false if the data is empty
@@ -81,10 +81,17 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 	villages.clear_all()
 	for item in data.get("villages", []):
 		var d: Dictionary = item
+		# Old saves have no colour — derive it from the founding order,
+		# the same way new villages pick theirs.
+		var col: Color = Villages.VILLAGE_COLORS[villages.villages.size() % Villages.VILLAGE_COLORS.size()]
+		var saved_color := String(d.get("color", ""))
+		if saved_color != "":
+			col = Color.html(saved_color)
 		villages.villages.append(Villages.VillageData.new(
 			String(d.get("name", "Village")),
 			Vector2i(int(d.get("x", 0)), int(d.get("y", 0))),
-			int(d.get("day", 1))
+			int(d.get("day", 1)),
+			col
 		))
 	world.queue_redraw()
 	agents.queue_redraw()

@@ -12,6 +12,7 @@ const BREED_CHANCE := 0.003  # per tick, per agent standing next to a mate
 
 var agents: Array[SimAgent] = []
 var world: GodSimWorld = null
+var villages: Villages = null  # set by Main; used to keep citizens near home
 
 var _rng := RandomNumberGenerator.new()
 
@@ -81,8 +82,29 @@ func _move_agent(a: SimAgent, dt: float) -> void:
 
 ## Pick a nearby walkable tile to walk to. People like grass and forest;
 ## sheep only really like grass. Water and mountains are never picked.
+## Citizens stay near home: a person assigned to a village only picks
+## targets inside their own territory, and if they have wandered outside
+## it, they head back toward the village centre instead.
 func _pick_target(a: SimAgent) -> Vector2:
 	var tile := world.world_to_tile(a.pos)
+	var has_home := false
+	var home_center := Vector2.ZERO
+	var home_radius := 0.0
+	if a.kind == SimAgent.Kind.PERSON and villages != null and a.village >= 0 and a.village < villages.villages.size():
+		var v: Villages.VillageData = villages.villages[a.village]
+		has_home = true
+		home_center = world.tile_to_world(v.tile.x, v.tile.y)
+		home_radius = villages.territory_radius_px(v)
+		if a.pos.distance_to(home_center) > home_radius:
+			# Outside the border: walk home. A jittered point near the
+			# centre keeps citizens from all marching to one spot.
+			var back := home_center + Vector2(_rng.randf_range(-24, 24), _rng.randf_range(-24, 24))
+			var back_tile := world.world_to_tile(back)
+			if world.in_bounds(back_tile.x, back_tile.y):
+				var bt := world.get_terrain(back_tile.x, back_tile.y)
+				if bt != GodSimWorld.Terrain.WATER and bt != GodSimWorld.Terrain.MOUNTAIN:
+					return back
+			return home_center
 	for attempt in 8:
 		var nx := tile.x + _rng.randi_range(-4, 4)
 		var ny := tile.y + _rng.randi_range(-4, 4)
@@ -93,7 +115,10 @@ func _pick_target(a: SimAgent) -> Vector2:
 			continue
 		if a.kind == SimAgent.Kind.SHEEP and t == GodSimWorld.Terrain.FOREST:
 			continue
-		return world.tile_to_world(nx, ny)
+		var dest := world.tile_to_world(nx, ny)
+		if has_home and dest.distance_to(home_center) > home_radius:
+			continue
+		return dest
 	return a.pos
 
 func _try_breed() -> void:
@@ -114,10 +139,14 @@ func _try_breed() -> void:
 		if t != GodSimWorld.Terrain.GRASS and t != GodSimWorld.Terrain.FOREST:
 			continue
 		if _has_neighbour(a, 30.0) and _rng.randf() < BREED_CHANCE:
-			agents.append(SimAgent.new(
+			var child := SimAgent.new(
 				a.kind,
 				a.pos + Vector2(_rng.randf_range(-8, 8), _rng.randf_range(-8, 8))
-			))
+			)
+			if a.kind == SimAgent.Kind.PERSON:
+				# Children are born into their parent's village.
+				child.village = a.village
+			agents.append(child)
 			a.breed_cooldown = BREED_TIME
 			if a.kind == SimAgent.Kind.PERSON:
 				people += 1

@@ -14,11 +14,11 @@ script = ExtResource("1_main")
 [node name="World" type="Node2D" parent="."]
 script = ExtResource("2_world")
 
-[node name="Agents" type="Node2D" parent="."]
-script = ExtResource("3_agents")
-
 [node name="Villages" type="Node2D" parent="."]
 script = ExtResource("4_village")
+
+[node name="Agents" type="Node2D" parent="."]
+script = ExtResource("3_agents")
 
 [node name="Powers" type="Node2D" parent="."]
 script = ExtResource("5_powers")
