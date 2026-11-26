@@ -1,0 +1,9 @@
+# Godot-generated files (safe to delete; the editor recreates them)
+.godot/
+*.godot.uid
+
+# Export output
+export/
+*.apk
+*.aab
+*.zip
