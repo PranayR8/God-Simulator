@@ -30,6 +30,11 @@ var target: Vector2 = Vector2.ZERO
 var has_target: bool = false
 var breed_cooldown: float = 0.0  # ticks until this agent may breed again
 var age: float = 0.0  # age in ticks (unused in v1, kept for v2 ideas)
+## Hunger & health (Phase 2, people only — sheep don't go hungry).
+## hunger 0 = full, 100 = starving; it rises every tick and eating a
+## berry lowers it. While starving, health drains; at 0 the person dies.
+var hunger: float = 0.0
+var health: float = 100.0
 var shirt_color: Color = Color("#2980b9")
 var hair_color: Color = Color("#2c2118")
 var village: int = -1  # index into Villages.villages; -1 = no village yet (a nomad)

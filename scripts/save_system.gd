@@ -15,11 +15,12 @@ func save_exists() -> bool:
 
 func save_game(world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog, day: int, ticks: int) -> bool:
 	var data := {
-		"version": 1,
+		"version": 2,
 		"seed": world.seed_value,
 		"day": day,
 		"ticks": ticks,
 		"terrain": world.terrain,
+		"berries": _berries_to_data(world),
 		"agents": _agents_to_data(agents),
 		"villages": _villages_to_data(villages),
 		"log": event_log.to_data(),
@@ -50,7 +51,19 @@ func load_game() -> Dictionary:
 func _agents_to_data(agents: Agents) -> Array:
 	var out: Array = []
 	for a in agents.agents:
-		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y})
+		# Hunger/health only matter for people (sheep don't go hungry),
+		# but storing them for everyone keeps the format uniform; old
+		# saves without them load as full and healthy.
+		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health})
+	return out
+
+## Berries as a flat list of [x, y, count] triples (only tiles that
+## have any berries are stored).
+func _berries_to_data(world: GodSimWorld) -> Array:
+	var out: Array = []
+	for tile in world.berries.keys():
+		var t: Vector2i = tile
+		out.append([t.x, t.y, int(world.berries[t])])
 	return out
 
 func _villages_to_data(villages: Villages) -> Array:
@@ -61,7 +74,8 @@ func _villages_to_data(villages: Villages) -> Array:
 
 ## Rebuild the world from loaded data. Returns false if the data is empty
 ## or unusable (caller should generate a fresh world instead).
-## Old saves have no "log" key — the history just starts empty.
+## Old saves have no "log" key — the history just starts empty — and
+## no "berries" key — forests restock to full (see rebuild_berries).
 func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog) -> bool:
 	if data.is_empty():
 		return false
@@ -74,12 +88,23 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 	else:
 		# Save is from an older/different map size — regenerate instead.
 		world.generate_new(world.seed_value)
+	if data.has("berries"):
+		world.berries.clear()
+		for item in data.get("berries", []):
+			var triple: Array = item
+			if triple.size() == 3:
+				world.berries[Vector2i(int(triple[0]), int(triple[1]))] = int(triple[2])
+	else:
+		world.rebuild_berries()
 	agents.clear_all()
 	for item in data.get("agents", []):
 		var d: Dictionary = item
 		var kind := int(d.get("kind", 0))
 		var pos := Vector2(float(d.get("x", 0.0)), float(d.get("y", 0.0)))
-		agents.agents.append(SimAgent.new(kind, pos))
+		var na := SimAgent.new(kind, pos)
+		na.hunger = float(d.get("hunger", 0.0))
+		na.health = float(d.get("health", 100.0))
+		agents.agents.append(na)
 	villages.clear_all()
 	for item in data.get("villages", []):
 		var d: Dictionary = item

@@ -15,7 +15,12 @@ into a real mobile app.
 - **Painting** with a brush — fine (1 tile) or wide (3×3) — by touch or mouse.
 - **Life**: people and sheep wander on their own, prefer grass/forest,
   avoid water and mountains, and reproduce slowly when conditions are good.
-- **Villages**: when enough people cluster, they found a named village
+- **Hunger & food**: every person gets hungry over time. Forests grow
+  berries (small red dots, up to 5 per tile) that regrow over time; a
+  hungry person walks to the nearest berries and eats. Grass alone gives
+  nothing — a village with no forest nearby starves, and deaths are
+  logged as "died of starvation". Citizens may forage a few tiles past
+  their border to find food.
   (Wilwick, Kelholt, Bramley…) that grows houses and population over time.
   Every village owns a territory — a coloured border that grows with its
   citizens and stops at the halfway point to its nearest neighbour, so

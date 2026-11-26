@@ -57,6 +57,7 @@ func _ready() -> void:
 	# History: villages and births report through signals; Main stamps
 	# the day and writes them into the log, and the HUD redraws.
 	agents.child_born.connect(_on_child_born)
+	agents.starved.connect(_on_starved)
 	villages.village_founded.connect(_on_village_founded)
 	villages.people_joined.connect(_on_people_joined)
 	event_log.changed.connect(_on_log_changed)
@@ -117,6 +118,7 @@ func _process(delta: float) -> void:
 func _do_tick() -> void:
 	total_ticks += 1
 	day = 1 + total_ticks / TICKS_PER_DAY
+	world.tick()  # berries regrow
 	agents.tick(TICK_INTERVAL)
 	villages.tick(day)
 	if total_ticks % 40 == 0:
@@ -328,6 +330,9 @@ func _log_power(tool: String, killed: int) -> void:
 
 func _on_child_born(village_name: String) -> void:
 	event_log.add_birth(day, village_name)
+
+func _on_starved(village_name: String) -> void:
+	event_log.add_starvation_death(day, village_name)
 
 func _on_village_founded(village_name: String) -> void:
 	event_log.add(day, "%s was founded" % village_name)

@@ -274,5 +274,5 @@ by name.
 
 ## Status
 
-- Phase 0 — done (Nov 26, 2026). Phase 1 (event log) — done (Nov 26, 2026): History panel, founding/birth/power lines, birth aggregation, save/load of the log; verified by a deterministic headless test and a live browser playthrough (6 villages, 13 log entries in 6 days, zero errors). Phases 2–14 — not started.
-- Next up: Phase 2, Hunger & food.
+- Phase 0 — done (Nov 26, 2026). Phase 1 (event log) — done (Nov 26, 2026): History panel, founding/birth/power lines, birth aggregation, save/load of the log; verified by a deterministic headless test and a live browser playthrough (6 villages, 13 log entries in 6 days, zero errors). Phase 2 (hunger & food) — done (Nov 26, 2026): hunger rises over time, forests grow berries (red dots, up to 5/tile, regrow 1 per 60 ticks), hungry people walk to the nearest berries and eat (one berry restores 50 hunger), no food → starvation (health drains, death after ~2 days, logged as "died of starvation", aggregated per village per day); citizens may forage a few tiles past their border; hunger/health and berries saved (save format v2). Verified by a deterministic headless test (grass island: 13 starvation deaths in 300 ticks; forest: 0 deaths in 600 ticks, 10 → 15 people; berries eaten + regrown) and a live browser playthrough (Day 5, Wilwick 26 citizens by a forest, berries visible, no starvation, zero errors). Phases 3–14 — not started.
+- Next up: Phase 3, Aging & death.

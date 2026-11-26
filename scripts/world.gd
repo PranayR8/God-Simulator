@@ -25,7 +25,17 @@ const TERRAIN_COLORS := {
 var seed_value: int = 12345
 var terrain: Array[int] = []
 
+## Berries: the food on forest tiles (Phase 2). One entry per forest
+## tile that has any berries, mapping tile -> berry count (0..BERRY_MAX).
+## A tile with no entry has no berries. Berries regrow over time and
+## are eaten by hungry people standing nearby.
+var berries: Dictionary = {}
+
+const BERRY_MAX := 5            # berries on a forest tile when fully grown
+const BERRY_REGROW_TICKS := 60  # ticks for one berry to regrow per forest tile
+
 var _rng := RandomNumberGenerator.new()
+var _regrow_counter := 0
 
 func _ready() -> void:
 	terrain.resize(WIDTH * HEIGHT)
@@ -49,6 +59,14 @@ func get_terrain(x: int, y: int) -> int:
 func set_terrain(x: int, y: int, value: int) -> void:
 	if in_bounds(x, y):
 		terrain[index(x, y)] = value
+		# Berries live on forest tiles: a new forest starts lush, and a
+		# tile that stops being forest loses its berries.
+		var t := Vector2i(x, y)
+		if value == Terrain.FOREST:
+			if not berries.has(t):
+				berries[t] = BERRY_MAX
+		else:
+			berries.erase(t)
 
 func tile_to_world(tx: int, ty: int) -> Vector2:
 	return Vector2((tx + 0.5) * TILE, (ty + 0.5) * TILE)
@@ -65,6 +83,51 @@ func is_walkable(x: int, y: int) -> bool:
 func tile_hash(x: int, y: int) -> int:
 	var h: int = (x * 73856093) ^ (y * 19349663) ^ (seed_value * 83492791)
 	return abs(h) % 100
+
+
+# --- berries (food) ---------------------------------------------------------
+
+## Berries on a tile (0 when there is no forest or no berries left).
+func berries_at(tile: Vector2i) -> int:
+	return int(berries.get(tile, 0))
+
+## Eat one berry from a tile. Returns true when there was one to eat.
+func eat_berry(tile: Vector2i) -> bool:
+	var n := berries_at(tile)
+	if n <= 0:
+		return false
+	if n == 1:
+		berries.erase(tile)
+	else:
+		berries[tile] = n - 1
+	queue_redraw()
+	return true
+
+## One simulation tick: berries regrow. Every BERRY_REGROW_TICKS, each
+## forest tile below the maximum gains one berry.
+func tick() -> void:
+	_regrow_counter += 1
+	if _regrow_counter < BERRY_REGROW_TICKS:
+		return
+	_regrow_counter = 0
+	for y in HEIGHT:
+		for x in WIDTH:
+			if terrain[index(x, y)] == Terrain.FOREST:
+				var t := Vector2i(x, y)
+				var n := berries_at(t)
+				if n < BERRY_MAX:
+					berries[t] = n + 1
+	queue_redraw()
+
+## Give every forest tile a full load of berries (used when loading an
+## old save that stored no berry data).
+func rebuild_berries() -> void:
+	berries.clear()
+	for y in HEIGHT:
+		for x in WIDTH:
+			if terrain[index(x, y)] == Terrain.FOREST:
+				berries[Vector2i(x, y)] = BERRY_MAX
+	queue_redraw()
 
 
 # --- generation ------------------------------------------------------------
@@ -105,6 +168,7 @@ func _draw() -> void:
 			draw_rect(rect, TERRAIN_COLORS[t])
 			if t == Terrain.FOREST:
 				_draw_tree(x, y)
+				_draw_berries(x, y)
 			elif t == Terrain.MOUNTAIN:
 				_draw_peak(x, y)
 			elif t == Terrain.WATER and tile_hash(x, y) < 12:
@@ -121,6 +185,21 @@ func _draw_tree(x: int, y: int) -> void:
 	var cy := (y + 0.35 + 0.3 * float((h / 10) % 10) / 10.0) * TILE
 	draw_circle(Vector2(cx, cy), 6.0, Color("#2c7a38"))
 	draw_circle(Vector2(cx - 2, cy - 2), 3.0, Color("#57b368"))
+
+## Berries: small red dots on a forest tile, one per berry (up to
+## BERRY_MAX). Fixed positions, so they don't jump around between
+## frames — the count is what changes as they are eaten and regrow.
+func _draw_berries(x: int, y: int) -> void:
+	var n := berries_at(Vector2i(x, y))
+	if n <= 0:
+		return
+	var centre := Vector2((x + 0.5) * TILE, (y + 0.5) * TILE)
+	var spots := [
+		Vector2(-7, -5), Vector2(7, -6), Vector2(-6, 6),
+		Vector2(6, 6), Vector2(0, -8),
+	]
+	for i in mini(n, spots.size()):
+		draw_circle(centre + spots[i], 2.2, Color("#d43d2a"))
 
 func _draw_peak(x: int, y: int) -> void:
 	var base := Vector2(x * TILE, (y + 1) * TILE)

@@ -10,6 +10,20 @@ const MAX_SHEEP := 140
 const BREED_TIME := 60.0  # ticks of cooldown after breeding (15s at 1x)
 const BREED_CHANCE := 0.003  # per tick, per agent standing next to a mate
 
+## Hunger (Phase 2, people only). Hunger rises every tick; at 100 the
+## person is starving and health drains. A berry restores 50 hunger,
+## so a person eats about one berry a day. Death starts after ~2 days
+## with no food (1 day to max hunger + 1 day of draining health).
+const HUNGER_MAX := 100.0
+const HUNGER_PER_TICK := 100.0 / 120.0  # full → starving in 1 day
+const HUNGER_SEEK := 50.0  # start looking for food at half hunger
+const BERRY_HUNGER := 50.0  # hunger restored by one berry
+const HEALTH_MAX := 100.0
+const STARVE_DRAIN_PER_TICK := 100.0 / 120.0  # health 100 → 0 in 1 day of starving
+const HEALTH_REGEN_PER_TICK := 2.0  # health recovered per tick while fed
+const FORAGE_RANGE := 20  # tiles; how far a hungry person will walk for food
+const FORAGE_MARGIN := 4  # tiles past their territory a citizen may forage
+
 var agents: Array[SimAgent] = []
 var world: GodSimWorld = null
 var villages: Villages = null  # set by Main; used to keep citizens near home
@@ -17,6 +31,10 @@ var villages: Villages = null  # set by Main; used to keep citizens near home
 ## Emitted when a child is born. village_name is "" for a nomad birth;
 ## Main stamps the day and lets the EventLog aggregate births.
 signal child_born(village_name: String)
+
+## Emitted when a person dies of starvation. village_name is "" for a
+## nomad; Main logs it (aggregated per village per day, like births).
+signal starved(village_name: String)
 
 var _rng := RandomNumberGenerator.new()
 
@@ -61,7 +79,7 @@ func random_walkable_tile() -> Vector2i:
 			return Vector2i(x, y)
 	return Vector2i(-1, -1)
 
-## One simulation tick: move everyone, then maybe breed.
+## One simulation tick: hunger and health, movement, then maybe breed.
 ## dt is the tick length in seconds (used for movement).
 func tick(dt: float) -> void:
 	var i := 0
@@ -69,10 +87,47 @@ func tick(dt: float) -> void:
 		var a := agents[i]
 		a.age += 1.0
 		a.breed_cooldown = maxf(0.0, a.breed_cooldown - 1.0)
+		if a.kind == SimAgent.Kind.PERSON:
+			if _update_hunger(a):
+				# Starved to death — removed from the list, so don't
+				# advance i; the next agent slid into this slot.
+				continue
+			_try_eat(a)
 		_move_agent(a, dt)
 		i += 1
 	_try_breed()
 	queue_redraw()
+
+## Hunger rises every tick; at max hunger, health drains. Returns true
+## if the person starved to death (and removes them from the list).
+func _update_hunger(a: SimAgent) -> bool:
+	a.hunger = minf(HUNGER_MAX, a.hunger + HUNGER_PER_TICK)
+	if a.hunger >= HUNGER_MAX:
+		a.health -= STARVE_DRAIN_PER_TICK
+		if a.health <= 0.0:
+			var home_name := ""
+			if a.village >= 0 and villages != null and a.village < villages.villages.size():
+				home_name = villages.villages[a.village].name
+			agents.erase(a)
+			starved.emit(home_name)
+			return true
+	else:
+		# Fed: slowly recover any health lost to an earlier hunger spell.
+		a.health = minf(HEALTH_MAX, a.health + HEALTH_REGEN_PER_TICK)
+	return false
+
+## If this person is hungry and stands on (or next to) a forest tile
+## with berries, eat one: the berry is gone, hunger drops.
+func _try_eat(a: SimAgent) -> void:
+	if a.hunger < HUNGER_SEEK:
+		return
+	var tile := world.world_to_tile(a.pos)
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			var t := Vector2i(tile.x + dx, tile.y + dy)
+			if world.in_bounds(t.x, t.y) and world.eat_berry(t):
+				a.hunger = maxf(0.0, a.hunger - BERRY_HUNGER)
+				return
 
 func _move_agent(a: SimAgent, dt: float) -> void:
 	if not a.has_target or a.pos.distance_to(a.target) < 4.0:
@@ -89,7 +144,14 @@ func _move_agent(a: SimAgent, dt: float) -> void:
 ## Citizens stay near home: a person assigned to a village only picks
 ## targets inside their own territory, and if they have wandered outside
 ## it, they head back toward the village centre instead.
+## The exception is hunger: a hungry person walks to the nearest food
+## first (see _nearest_food_tile) — they may step a few tiles past
+## their border to forage, but no further.
 func _pick_target(a: SimAgent) -> Vector2:
+	if a.kind == SimAgent.Kind.PERSON and a.hunger >= HUNGER_SEEK:
+		var food := _nearest_food_tile(a)
+		if food.x >= 0:
+			return world.tile_to_world(food.x, food.y)
 	var tile := world.world_to_tile(a.pos)
 	var has_home := false
 	var home_center := Vector2.ZERO
@@ -125,8 +187,46 @@ func _pick_target(a: SimAgent) -> Vector2:
 		return dest
 	return a.pos
 
-func _try_breed() -> void:
-	# A creature breeds when it stands next to another of its kind on good
+## Nearest forest tile with berries this person may walk to, searching
+## outward ring by ring from where they stand (up to FORAGE_RANGE
+## tiles). Citizens may only forage inside their territory plus a
+## small margin past the border — a village with no forest nearby
+## starves, which is the point: land matters. Nomads range freely.
+## Returns Vector2i(-1, -1) when no reachable food exists.
+func _nearest_food_tile(a: SimAgent) -> Vector2i:
+	var from := world.world_to_tile(a.pos)
+	var home_center := Vector2.ZERO
+	var home_limit := INF
+	if villages != null and a.village >= 0 and a.village < villages.villages.size():
+		var v: Villages.VillageData = villages.villages[a.village]
+		home_center = world.tile_to_world(v.tile.x, v.tile.y)
+		home_limit = villages.territory_radius_px(v) + FORAGE_MARGIN * GodSimWorld.TILE
+	for r in range(1, FORAGE_RANGE + 1):
+		for dx in range(-r, r + 1):
+			for dy in [-r, r]:
+				var t := Vector2i(from.x + dx, from.y + dy)
+				if _is_food_tile(t, home_center, home_limit):
+					return t
+		for dy in range(-r + 1, r):
+			for dx in [-r, r]:
+				var t := Vector2i(from.x + dx, from.y + dy)
+				if _is_food_tile(t, home_center, home_limit):
+					return t
+	return Vector2i(-1, -1)
+
+func _is_food_tile(t: Vector2i, home_center: Vector2, home_limit: float) -> bool:
+	if not world.in_bounds(t.x, t.y):
+		return false
+	if world.get_terrain(t.x, t.y) != GodSimWorld.Terrain.FOREST:
+		return false
+	if world.berries_at(t) <= 0:
+		return false
+	if home_limit < INF:
+		if world.tile_to_world(t.x, t.y).distance_to(home_center) > home_limit:
+			return false
+	return true
+
+func _try_breed() -> void:	# A creature breeds when it stands next to another of its kind on good
 	# land, its cooldown has expired, and the population cap allows it.
 	# (We iterate a copy of the list because breeding appends to it.)
 	var people := count_people()
