@@ -25,6 +25,10 @@ var brush_wide := false
 var day := 1
 var total_ticks := 0
 
+## The world's history — one EventLog for the whole game, created here
+## so it exists before _ready wires everything up.
+var event_log := EventLog.new()
+
 var _tick_acc := 0.0
 var _painting := false
 var _touches := {}  # touch index -> last screen position (Vector2)
@@ -50,6 +54,11 @@ func _ready() -> void:
 	villages.agents = agents
 	powers.world = world
 	powers.agents = agents
+	# History: villages and births report through signals; Main stamps
+	# the day and writes them into the log, and the HUD redraws.
+	agents.child_born.connect(_on_child_born)
+	villages.village_founded.connect(_on_village_founded)
+	event_log.changed.connect(_on_log_changed)
 	hud.tool_selected.connect(_on_tool_selected)
 	hud.brush_changed.connect(_on_brush_changed)
 	hud.pause_pressed.connect(_on_pause_pressed)
@@ -61,7 +70,7 @@ func _ready() -> void:
 	hud.zoom_fit_pressed.connect(_fit_camera)
 	if save_system.save_exists():
 		var data := save_system.load_game()
-		if save_system.apply_save(data, world, agents, villages):
+		if save_system.apply_save(data, world, agents, villages, event_log):
 			day = int(data.get("day", 1))
 			total_ticks = int(data.get("ticks", 0))
 			hud.set_hint("World loaded — welcome back!")
@@ -71,6 +80,7 @@ func _ready() -> void:
 		_new_world()
 	_fit_camera()
 	_update_hud()
+	hud.update_log(event_log.entries)
 
 func _new_world() -> void:
 	world.generate_new()
@@ -78,6 +88,8 @@ func _new_world() -> void:
 	villages.clear_all()
 	day = 1
 	total_ticks = 0
+	event_log.clear()
+	event_log.add(1, "A new world began")
 	# Starter life so the world feels alive right away.
 	agents.spawn_scattered(SimAgent.Kind.PERSON, 10)
 	agents.spawn_scattered(SimAgent.Kind.SHEEP, 8)
@@ -86,7 +98,7 @@ func _new_world() -> void:
 	hud.set_hint("New world! Paint terrain, then spawn people.")
 
 func _save_quietly() -> void:
-	save_system.save_game(world, agents, villages, day, total_ticks)
+	save_system.save_game(world, agents, villages, event_log, day, total_ticks)
 
 
 # --- simulation ------------------------------------------------------------
@@ -290,8 +302,37 @@ func _apply_tool_at_screen(screen_pos: Vector2, is_start: bool) -> void:
 				agents.spawn(SimAgent.Kind.SHEEP, tile)
 				_update_hud()
 		Hud.TOOL_RAIN, Hud.TOOL_LIGHTNING, Hud.TOOL_METEOR:
-			powers.apply_power(_tool_power(), tile)
+			# Powers only log on the press, not on drags — a rain drag
+			# paints dozens of tiles and would flood the log.
+			var killed := powers.apply_power(_tool_power(), tile)
+			if is_start:
+				_log_power(current_tool, killed)
 			_update_hud()
+
+## One log line for a power the player just used.
+func _log_power(tool: String, killed: int) -> void:
+	match tool:
+		Hud.TOOL_RAIN:
+			event_log.add(day, "Rain fell on the land")
+		Hud.TOOL_LIGHTNING:
+			if killed > 0:
+				event_log.add(day, "Lightning struck, killing %d" % killed)
+			else:
+				event_log.add(day, "Lightning struck the ground")
+		Hud.TOOL_METEOR:
+			if killed > 0:
+				event_log.add(day, "A meteor crashed down, killing %d" % killed)
+			else:
+				event_log.add(day, "A meteor crashed down, leaving a crater")
+
+func _on_child_born(village_name: String) -> void:
+	event_log.add_birth(day, village_name)
+
+func _on_village_founded(village_name: String) -> void:
+	event_log.add(day, "%s was founded" % village_name)
+
+func _on_log_changed() -> void:
+	hud.update_log(event_log.entries)
 
 func _apply_tool_along_screen(screen_pos: Vector2) -> void:
 	# Dragging: interpolate tiles between the last painted tile and this
@@ -364,7 +405,7 @@ func _on_speed_pressed() -> void:
 	hud.set_speed(SPEEDS[speed_index])
 
 func _on_save_pressed() -> void:
-	if save_system.save_game(world, agents, villages, day, total_ticks):
+	if save_system.save_game(world, agents, villages, event_log, day, total_ticks):
 		hud.set_hint("World saved.")
 	else:
 		hud.set_hint("Save failed!")

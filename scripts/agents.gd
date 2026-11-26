@@ -14,6 +14,10 @@ var agents: Array[SimAgent] = []
 var world: GodSimWorld = null
 var villages: Villages = null  # set by Main; used to keep citizens near home
 
+## Emitted when a child is born. village_name is "" for a nomad birth;
+## Main stamps the day and lets the EventLog aggregate births.
+signal child_born(village_name: String)
+
 var _rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
@@ -150,6 +154,10 @@ func _try_breed() -> void:
 			a.breed_cooldown = BREED_TIME
 			if a.kind == SimAgent.Kind.PERSON:
 				people += 1
+				var home_name := ""
+				if a.village >= 0 and villages != null and a.village < villages.villages.size():
+					home_name = villages.villages[a.village].name
+				child_born.emit(home_name)
 			else:
 				sheep += 1
 

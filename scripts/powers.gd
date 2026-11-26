@@ -24,17 +24,21 @@ var _rng := RandomNumberGenerator.new()
 func _ready() -> void:
 	_rng.randomize()
 
-func apply_power(power: int, tile: Vector2i) -> void:
+## Apply a power at a tile. Returns how many creatures died (0 for
+## rain) — Main logs the event with that number.
+func apply_power(power: int, tile: Vector2i) -> int:
+	var killed := 0
 	match power:
 		Power.RAIN:
 			_apply_rain(tile)
 		Power.LIGHTNING:
-			_apply_lightning(tile)
+			killed = _apply_lightning(tile)
 		Power.METEOR:
-			_apply_meteor(tile)
+			killed = _apply_meteor(tile)
 	queue_redraw()
 	world.queue_redraw()
 	agents.queue_redraw()
+	return killed
 
 ## Rain waters the land: scorched ground becomes grass again, and grass
 ## sometimes grows into forest.
@@ -59,9 +63,10 @@ func _apply_rain(center: Vector2i) -> void:
 	})
 
 ## Lightning kills creatures in a small radius and scorches forest.
-func _apply_lightning(center: Vector2i) -> void:
+## Returns how many creatures died.
+func _apply_lightning(center: Vector2i) -> int:
 	var pos := world.tile_to_world(center.x, center.y)
-	agents.kill_in_radius(pos, LIGHTNING_RADIUS * GodSimWorld.TILE)
+	var killed := agents.kill_in_radius(pos, LIGHTNING_RADIUS * GodSimWorld.TILE)
 	for dy in range(-LIGHTNING_RADIUS, LIGHTNING_RADIUS + 1):
 		for dx in range(-LIGHTNING_RADIUS, LIGHTNING_RADIUS + 1):
 			if dx * dx + dy * dy > LIGHTNING_RADIUS * LIGHTNING_RADIUS:
@@ -80,11 +85,13 @@ func _apply_lightning(center: Vector2i) -> void:
 	_effects.append({
 		"kind": Power.LIGHTNING, "pos": pos, "ttl": 0.35, "max": 0.35, "points": pts,
 	})
+	return killed
 
 ## Meteor: a crater of scorched rock, everything in the radius dies.
-func _apply_meteor(center: Vector2i) -> void:
+## Returns how many creatures died.
+func _apply_meteor(center: Vector2i) -> int:
 	var pos := world.tile_to_world(center.x, center.y)
-	agents.kill_in_radius(pos, METEOR_RADIUS * GodSimWorld.TILE)
+	var killed := agents.kill_in_radius(pos, METEOR_RADIUS * GodSimWorld.TILE)
 	for dy in range(-METEOR_RADIUS, METEOR_RADIUS + 1):
 		for dx in range(-METEOR_RADIUS, METEOR_RADIUS + 1):
 			if dx * dx + dy * dy > METEOR_RADIUS * METEOR_RADIUS:
@@ -96,6 +103,7 @@ func _apply_meteor(center: Vector2i) -> void:
 	_effects.append({
 		"kind": Power.METEOR, "pos": pos, "ttl": 0.8, "max": 0.8,
 	})
+	return killed
 
 func _process(delta: float) -> void:
 	if _effects.is_empty():

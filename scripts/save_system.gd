@@ -13,7 +13,7 @@ const SAVE_PATH := "user://world.json"
 func save_exists() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)
 
-func save_game(world: GodSimWorld, agents: Agents, villages: Villages, day: int, ticks: int) -> bool:
+func save_game(world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog, day: int, ticks: int) -> bool:
 	var data := {
 		"version": 1,
 		"seed": world.seed_value,
@@ -22,6 +22,7 @@ func save_game(world: GodSimWorld, agents: Agents, villages: Villages, day: int,
 		"terrain": world.terrain,
 		"agents": _agents_to_data(agents),
 		"villages": _villages_to_data(villages),
+		"log": event_log.to_data(),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
@@ -60,7 +61,8 @@ func _villages_to_data(villages: Villages) -> Array:
 
 ## Rebuild the world from loaded data. Returns false if the data is empty
 ## or unusable (caller should generate a fresh world instead).
-func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: Villages) -> bool:
+## Old saves have no "log" key — the history just starts empty.
+func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog) -> bool:
 	if data.is_empty():
 		return false
 	world.seed_value = int(data.get("seed", 0))
@@ -93,6 +95,7 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 			int(d.get("day", 1)),
 			col
 		))
+	event_log.from_data(data.get("log", []))
 	world.queue_redraw()
 	agents.queue_redraw()
 	villages.queue_redraw()

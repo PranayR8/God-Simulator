@@ -38,6 +38,18 @@ var brush_wide: bool = false
 @onready var _pause_button: Button = $TopBar/Margin/HBox/PauseButton
 @onready var _speed_button: Button = $TopBar/Margin/HBox/SpeedButton
 @onready var _hint_label: Label = $HintLabel
+@onready var _log_panel: PanelContainer = $LogPanel
+@onready var _log_toggle: Button = $LogPanel/Margin/VBox/HeaderRow/LogToggle
+@onready var _log_latest: Label = $LogPanel/Margin/VBox/LogLatest
+@onready var _log_scroll: ScrollContainer = $LogPanel/Margin/VBox/LogScroll
+@onready var _log_entries: Label = $LogPanel/Margin/VBox/LogScroll/LogEntries
+
+## The history panel sits top-left, below the stats bar. Collapsed it
+## shows just the latest event; expanded it scrolls the whole log.
+const LOG_COLLAPSED_BOTTOM := 140.0
+const LOG_EXPANDED_BOTTOM := 496.0
+
+var log_expanded := false
 
 var _tool_buttons := {}
 
@@ -64,6 +76,7 @@ func _ready() -> void:
 	$ZoomBox/ZoomInButton.pressed.connect(func() -> void: zoom_in_pressed.emit())
 	$ZoomBox/ZoomOutButton.pressed.connect(func() -> void: zoom_out_pressed.emit())
 	$ZoomBox/ZoomFitButton.pressed.connect(func() -> void: zoom_fit_pressed.emit())
+	_log_toggle.pressed.connect(_on_log_toggle_pressed)
 	_select_tool(TOOL_PAINT_GRASS)
 
 func update_stats(day: int, people: int, villages: int, animals: int) -> void:
@@ -80,6 +93,29 @@ func set_speed(multiplier: int) -> void:
 
 func set_hint(text: String) -> void:
 	_hint_label.text = text
+
+## Redraw the history panel from the log's entries (dictionaries with
+## "day" and "text"). Newest entry first; the collapsed one-liner shows
+## only the latest.
+func update_log(entries: Array) -> void:
+	if entries.is_empty():
+		_log_latest.text = "No events yet — the story starts soon."
+		_log_entries.text = ""
+		return
+	var newest: Dictionary = entries[entries.size() - 1]
+	_log_latest.text = "Day %d — %s" % [int(newest.get("day", 1)), String(newest.get("text", ""))]
+	var lines: Array[String] = []
+	for i in range(entries.size() - 1, -1, -1):
+		var e: Dictionary = entries[i]
+		lines.append("Day %d — %s" % [int(e.get("day", 1)), String(e.get("text", ""))])
+	_log_entries.text = "\n".join(lines)
+
+func _on_log_toggle_pressed() -> void:
+	log_expanded = not log_expanded
+	_log_scroll.visible = log_expanded
+	_log_latest.visible = not log_expanded
+	_log_panel.offset_bottom = LOG_EXPANDED_BOTTOM if log_expanded else LOG_COLLAPSED_BOTTOM
+	_log_toggle.text = "Hide" if log_expanded else "Show"
 
 func _on_tool_button_pressed(tool: String) -> void:
 	_select_tool(tool)

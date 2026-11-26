@@ -54,6 +54,9 @@ var villages: Array[VillageData] = []
 var world: GodSimWorld = null
 var agents: Agents = null
 
+## Emitted when a village is founded. Main stamps the day and logs it.
+signal village_founded(village_name: String)
+
 var _scan_counter := 0
 
 func clear_all() -> void:
@@ -92,6 +95,7 @@ func _try_found(current_day: int) -> void:
 		var new_index := villages.size()
 		var color: Color = VILLAGE_COLORS[new_index % VILLAGE_COLORS.size()]
 		villages.append(VillageData.new(village_name, tile, current_day, color))
+		village_founded.emit(village_name)
 		# The people standing here are the founders — they belong to the
 		# new village from the moment it exists.
 		var center := world.tile_to_world(tile.x, tile.y)

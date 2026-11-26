@@ -124,6 +124,55 @@ focus_mode = 0
 theme_override_font_sizes/font_size = 26
 text = "-"
 
+[node name="LogPanel" type="PanelContainer" parent="HUD"]
+offset_left = 8.0
+offset_top = 76.0
+offset_right = 308.0
+offset_bottom = 140.0
+
+[node name="Margin" type="MarginContainer" parent="HUD/LogPanel"]
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 6
+
+[node name="VBox" type="VBoxContainer" parent="HUD/LogPanel/Margin"]
+theme_override_constants/separation = 4
+
+[node name="HeaderRow" type="HBoxContainer" parent="HUD/LogPanel/Margin/VBox"]
+theme_override_constants/separation = 8
+
+[node name="LogTitle" type="Label" parent="HUD/LogPanel/Margin/VBox/HeaderRow"]
+theme_override_font_sizes/font_size = 16
+text = "History"
+vertical_alignment = 1
+
+[node name="Spacer" type="Control" parent="HUD/LogPanel/Margin/VBox/HeaderRow"]
+size_flags_horizontal = 3
+
+[node name="LogToggle" type="Button" parent="HUD/LogPanel/Margin/VBox/HeaderRow"]
+custom_minimum_size = Vector2(64, 32)
+focus_mode = 0
+theme_override_font_sizes/font_size = 16
+text = "Show"
+
+[node name="LogLatest" type="Label" parent="HUD/LogPanel/Margin/VBox"]
+theme_override_font_sizes/font_size = 15
+text = "No events yet — the story starts soon."
+vertical_alignment = 0
+autowrap_mode = 2
+
+[node name="LogScroll" type="ScrollContainer" parent="HUD/LogPanel/Margin/VBox"]
+visible = false
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="LogEntries" type="Label" parent="HUD/LogPanel/Margin/VBox/LogScroll"]
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 15
+vertical_alignment = 0
+autowrap_mode = 2
+
 [node name="HintLabel" type="Label" parent="HUD"]
 anchors_preset = 7
 anchor_left = 0.5
