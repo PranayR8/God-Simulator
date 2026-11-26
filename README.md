@@ -40,14 +40,22 @@ into a real mobile app.
   the log records each promotion ("Wilwick became a Town"). A village
   that loses people falls back down a stage, too.
 - **Jobs**: adult citizens take jobs based on what's nearby — Farmers
-  tend the forest around the village and grow food (a village with
-  farmers stops starving), Woodcutters clear the forest at the village's
-  edge (the forest visibly recedes), Builders raise houses faster. You
-  can tell who's doing what at a glance: a small dot above the head and
-  a trim on the tunic, green for farmers, brown for woodcutters, grey
-  for builders. Hires show up in the History ("A farmer took up work in
-  Wilwick"). A village on open grass gets only builders — there's
-  nothing to farm or fell.
+  harvest food into the village store (a village with farmers stops
+  starving), Woodcutters clear the forest at the village's edge (the
+  forest visibly recedes) and bring in timber, Builders raise houses
+  faster. You can tell who's doing what at a glance: a small dot above
+  the head and a trim on the tunic, green for farmers, brown for
+  woodcutters, grey for builders. Hires show up in the History ("A
+  farmer took up work in Wilwick"). A village on open grass gets only
+  builders — there's nothing to farm or fell.
+- **Resources & stockpiles**: every village stores food and wood, shown
+  in its label ("Wilwick · Town · 33 · F12 · W8"). Farmers fill the food
+  store (one unit per harvest, where there's forest to farm); citizens
+  eat from the store first and only forage berries when it's empty — so
+  a village with a full store weathers a lean spell, and an empty one
+  starves. Woodcutters fill the wood store (2 per felled tile), and
+  each extra house a builder raises costs 2 wood — a village with
+  builders but no timber stays at its basic houses.
   (Wilwick, Kelholt, Bramley…) that grows houses and population over time.
   Every village owns a territory — a coloured border that grows with its
   citizens and stops at the halfway point to its nearest neighbour, so

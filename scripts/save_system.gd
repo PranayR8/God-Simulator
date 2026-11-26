@@ -15,7 +15,7 @@ func save_exists() -> bool:
 
 func save_game(world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog, day: int, ticks: int) -> bool:
 	var data := {
-		"version": 4,
+		"version": 5,
 		"seed": world.seed_value,
 		"day": day,
 		"ticks": ticks,
@@ -72,7 +72,7 @@ func _berries_to_data(world: GodSimWorld) -> Array:
 func _villages_to_data(villages: Villages) -> Array:
 	var out: Array = []
 	for v in villages.villages:
-		out.append({"name": v.name, "x": v.tile.x, "y": v.tile.y, "day": v.founded_day, "color": v.color.to_html()})
+		out.append({"name": v.name, "x": v.tile.x, "y": v.tile.y, "day": v.founded_day, "color": v.color.to_html(), "food": v.food, "wood": v.wood, "extra_houses": v.extra_houses_built})
 	return out
 
 ## Rebuild the world from loaded data. Returns false if the data is empty
@@ -125,12 +125,19 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		var saved_color := String(d.get("color", ""))
 		if saved_color != "":
 			col = Color.html(saved_color)
-		villages.villages.append(Villages.VillageData.new(
+		var nv: Villages.VillageData = Villages.VillageData.new(
 			String(d.get("name", "Village")),
 			Vector2i(int(d.get("x", 0)), int(d.get("y", 0))),
 			int(d.get("day", 1)),
 			col
-		))
+		)
+		# Old saves have no stockpiles — they start empty, with no
+		# extra houses: the village rebuilds its builder houses as
+		# woodcutters bring timber in.
+		nv.food = float(d.get("food", 0.0))
+		nv.wood = float(d.get("wood", 0.0))
+		nv.extra_houses_built = int(d.get("extra_houses", 0))
+		villages.villages.append(nv)
 	event_log.from_data(data.get("log", []))
 	world.queue_redraw()
 	agents.queue_redraw()

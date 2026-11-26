@@ -29,6 +29,18 @@ class VillageData:
 	## right after a save is loaded — the first stage check adopts the
 	## current stage silently so a load never logs a fake promotion).
 	var stage: int = -1
+	## Phase 6 — stockpiles. food is the village store: farmers add to
+	## it, citizens eat from it first (before foraging berries). wood is
+	## the timber store: woodcutters add 2 per felled tile, and each
+	## extra house a builder raises costs HOUSE_WOOD_COST. Both start
+	## empty — a new village has to produce before it can store.
+	var food: float = 0.0
+	var wood: float = 0.0
+	## Builder-bonus houses actually constructed (each cost wood). The
+	## base houses (one per 3 citizens) are free — they're the village's
+	## basic dwellings — so a village with builders but no wood still
+	## has its basic houses; it just doesn't get the extra ones.
+	var extra_houses_built: int = 0
 
 	func _init(p_name: String, p_tile: Vector2i, p_day: int, p_color: Color) -> void:
 		name = p_name
@@ -49,6 +61,12 @@ const MIN_VILLAGE_GAP := 8  # tiles between village centres
 const FOUND_JOIN_MARGIN := 4  # tiles beyond a village's territory where a group still joins it instead of founding
 const POP_PER_HOUSE := 3
 const MIN_TERRITORY := 5   # territory radius in tiles, even for a young village
+
+## Phase 6 — the stockpile economy. A builder-bonus house costs this
+## much wood; a woodcutter gets this much wood per felled tile. One
+## food feeds one person once (restores 50 hunger, the same as a berry).
+const HOUSE_WOOD_COST := 2.0
+const WOOD_PER_TILE := 2.0
 
 ## Growth stages (Phase 4): a village's stage is its citizen count —
 ## Hamlet at 6, Village at 15, Town at 30, City at 60. Each stage
@@ -108,6 +126,7 @@ func tick(current_day: int) -> void:
 		_assign_people()
 		_check_stages()
 		_assign_jobs()
+		_build_houses()
 	queue_redraw()
 
 func _try_found(current_day: int) -> void:
@@ -308,9 +327,10 @@ func stage_of(v: VillageData) -> int:
 func stage_name(v: VillageData) -> String:
 	return STAGE_NAMES[stage_of(v)]
 
-## The map label: name, stage, citizens — "Wilwick · Town · 33".
+## The map label: name, stage, citizens, and the two stockpiles —
+## "Wilwick · Town · 33 · F12 · W8". F is food, W is wood.
 func label_text(v: VillageData) -> String:
-	return "%s · %s · %d" % [v.name, stage_name(v), population_of(v)]
+	return "%s · %s · %d · F%d · W%d" % [v.name, stage_name(v), population_of(v), int(v.food), int(v.wood)]
 
 ## The territory radius from population alone, before the neighbour
 ## cap — the village's natural size, used for its sphere of
@@ -362,10 +382,12 @@ func territory_radius_px(v: VillageData) -> float:
 	return float(territory_radius_tiles(v) * GodSimWorld.TILE)
 
 func house_count(v: VillageData) -> int:
-	# Builders raise the count by one each (up to the stage cap), so a
-	# village with builders gets its houses sooner — houses appear
-	# faster, which is the Builder's whole point.
-	return clampi(population_of(v) / POP_PER_HOUSE + builders_of(v), 1, STAGE_HOUSE_CAPS[stage_of(v)])
+	# The houses actually standing: the base dwellings (one per 3
+	# citizens, free — Phase 4) plus the builder-bonus houses that have
+	# been constructed (each cost wood — Phase 6), capped by the stage.
+	# A village with builders but no wood has only its base houses.
+	var base := clampi(population_of(v) / POP_PER_HOUSE, 1, STAGE_HOUSE_CAPS[stage_of(v)])
+	return mini(base + v.extra_houses_built, STAGE_HOUSE_CAPS[stage_of(v)])
 
 ## Builders among this village's citizens.
 func builders_of(v: VillageData) -> int:
@@ -443,6 +465,23 @@ func _assign_jobs() -> void:
 			a.job_timer = 0.0
 			counts[best] += 1
 			job_taken.emit(v.name, SimAgent.JOB_NAMES[best])
+
+## Build the extra houses the builders want, one per scan, as long as
+## the store has wood. Runs on the same 8th-tick scan as hiring. The
+## base houses are free; only the builder-bonus houses (one per
+## builder, up to the stage cap) cost wood — so a village with builders
+## but no woodcutters stays at its base house count until timber comes
+## in, and a village that spends its wood on houses has less for the
+## next one. Houses appear gradually, one at a time, which is visible
+## on the map.
+func _build_houses() -> void:
+	for v in villages:
+		var cap: int = STAGE_HOUSE_CAPS[stage_of(v)]
+		var base := clampi(population_of(v) / POP_PER_HOUSE, 1, cap)
+		var desired_extra := mini(builders_of(v), cap - base)
+		if v.extra_houses_built < desired_extra and v.wood >= HOUSE_WOOD_COST:
+			v.wood -= HOUSE_WOOD_COST
+			v.extra_houses_built += 1
 
 ## Where the houses stand. The built-up area spreads as the village
 ## grows: a golden-angle spiral out to a built-up radius that grows

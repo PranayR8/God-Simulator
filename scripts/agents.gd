@@ -130,24 +130,36 @@ func _do_job(a: SimAgent) -> void:
 	var v: Villages.VillageData = villages.villages[a.village]
 	var radius := villages.territory_radius_px(v)
 	if a.job == SimAgent.JOB_FARMER:
-		a.job_timer = 30.0
-		_tend_forest_tile(v, radius * 0.5)
+		a.job_timer = 15.0
+		# Phase 6: the farmer harvests food into the village store —
+		# one unit per 15 ticks (8 a day) — but only where there's
+		# forest to farm in the inner half of the territory. The berries
+		# on the map are natural regrowth now, foraged when the store is
+		# empty. (Phase 5's tend — adding a berry to the map — is
+		# replaced by this: the farmer's output is the stockpile, and
+		# the stockpile number in the village label is the visible food.)
+		if _has_forest_in_inner_half(v, radius * 0.5):
+			v.food += 1.0
 	elif a.job == SimAgent.JOB_WOODCUTTER:
 		a.job_timer = 120.0
 		var t := _furthest_forest_tile(v, radius * 0.5, radius + 2.0 * GodSimWorld.TILE)
 		if t.x >= 0:
 			world.set_terrain(t.x, t.y, GodSimWorld.Terrain.GRASS)
+			# Phase 6: felling a tile yields timber for the store.
+			v.wood += Villages.WOOD_PER_TILE
 
-## A farmer tending: pick a forest tile in the inner half of the
-## territory that isn't fully grown and add one berry. Picking a forest
-## tile directly (instead of a random tile and hoping it's forest) is
-## what makes farmers actually feed a village — on open land with only
-## a few forest tiles, a random pick almost never lands on one.
-## Returns false when every forest tile in the inner half is full.
-func _tend_forest_tile(v: Villages.VillageData, max_r: float) -> bool:
+## Is there any forest to farm in the inner half of the territory?
+## A farmer only produces food where there's land to farm — a village
+## on open grass has no farmers at all (see _assign_jobs), and a
+## village whose inner forest is gone stops producing until the land
+## recovers. Woodcutters only clear the outer ring, so they don't eat
+## the farmers' land. Picking a forest tile directly (instead of a
+## random tile and hoping it's forest) is what makes farmers actually
+## feed a village — on open land with only a few forest tiles, a random
+## pick almost never lands on one.
+func _has_forest_in_inner_half(v: Villages.VillageData, max_r: float) -> bool:
 	var center := world.tile_to_world(v.tile.x, v.tile.y)
 	var r_tiles := int(ceil(max_r / GodSimWorld.TILE))
-	var candidates: Array[Vector2i] = []
 	for dy in range(-r_tiles, r_tiles + 1):
 		for dx in range(-r_tiles, r_tiles + 1):
 			var t := Vector2i(v.tile.x + dx, v.tile.y + dy)
@@ -157,11 +169,8 @@ func _tend_forest_tile(v: Villages.VillageData, max_r: float) -> bool:
 				continue
 			if world.tile_to_world(t.x, t.y).distance_to(center) > max_r:
 				continue
-			if world.berries_at(t) < GodSimWorld.BERRY_MAX:
-				candidates.append(t)
-	if candidates.is_empty():
-		return false
-	return world.add_berry(candidates[_rng.randi_range(0, candidates.size() - 1)])
+			return true
+	return false
 
 ## The forest tile furthest from the village centre inside the annulus
 ## [min_r, max_r] — the forest edge, which is what a woodcutter clears.
@@ -216,11 +225,19 @@ func _update_aging(a: SimAgent) -> bool:
 	old_age_died.emit(home_name)
 	return true
 
-## If this person is hungry and stands on (or next to) a forest tile
-## with berries, eat one: the berry is gone, hunger drops.
+## If this person is hungry: first eat from their village's food store
+## (Phase 6 — the stockpile is the first resort), then forage a berry.
+## A citizen with food in the store doesn't need to walk anywhere; a
+## nomad, or a citizen whose store is empty, forages as before.
 func _try_eat(a: SimAgent) -> void:
 	if a.hunger < HUNGER_SEEK:
 		return
+	if a.kind == SimAgent.Kind.PERSON and a.village >= 0 and villages != null and a.village < villages.villages.size():
+		var v: Villages.VillageData = villages.villages[a.village]
+		if v.food >= 1.0:
+			v.food -= 1.0
+			a.hunger = maxf(0.0, a.hunger - BERRY_HUNGER)
+			return
 	var tile := world.world_to_tile(a.pos)
 	for dy in range(-1, 2):
 		for dx in range(-1, 2):
