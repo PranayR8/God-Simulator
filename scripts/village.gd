@@ -4,13 +4,16 @@ extends Node2D
 ## Owns all villages: founding, growth, territories, and drawing.
 ##
 ## A village is founded when at least FOUND_PEOPLE people stand close
-## together (within FOUND_RADIUS tiles). Every village owns a territory
-## — a circle around its centre whose radius grows with its population
-## and stops at the halfway point to its nearest neighbour, so two
-## territories meet at their border but never overlap. Every person
-## belongs to exactly one village (or to none, as a nomad). Citizens
-## stay near home and wander inside their own border; a nomad who walks
-## into a territory joins that village, and children are born into their
+## together (within FOUND_RADIUS tiles). A group that forms close to an
+## existing village joins it instead of founding a new one right next
+## door, so villages stay well spaced and their territories stay apart.
+## Every village owns a territory — a circle around its centre whose
+## radius grows with its population and stops at the halfway point to
+## its nearest neighbour, so two territories meet at their border but
+## never overlap. Every person belongs to exactly one village (or to
+## none, as a nomad). Citizens stay near home and wander inside their
+## own border; a nomad who comes within a few tiles of a village's
+## border joins that village, and children are born into their
 ## parent's village.
 ##
 ## VillageData is a small inner class — just the data for one village.
@@ -39,6 +42,7 @@ const NAMES := [
 const FOUND_PEOPLE := 6    # people within FOUND_RADIUS tiles to found a village
 const FOUND_RADIUS := 4    # in tiles
 const MIN_VILLAGE_GAP := 8  # tiles between village centres
+const FOUND_JOIN_MARGIN := 4  # tiles beyond a village's territory where a group still joins it instead of founding
 const POP_PER_HOUSE := 3
 const MAX_HOUSES := 12
 const MIN_TERRITORY := 5   # territory radius in tiles, even for a young village
@@ -58,6 +62,10 @@ var agents: Agents = null
 
 ## Emitted when a village is founded. Main stamps the day and logs it.
 signal village_founded(village_name: String)
+
+## Emitted when a group joins an existing village instead of founding.
+## Main logs it so the player can see the village growing.
+signal people_joined(village_name: String, count: int)
 
 var _scan_counter := 0
 
@@ -89,7 +97,23 @@ func _try_found(current_day: int) -> void:
 		var tile := world.world_to_tile(a.pos)
 		if agents.people_near(tile, FOUND_RADIUS) < FOUND_PEOPLE:
 			continue
+		# A group standing close to an existing village joins it instead
+		# of founding a new one right next door — this is what keeps
+		# villages well spaced and their territories apart.
+		if _try_join_nearby_village(tile):
+			return
 		if _near_existing_village(tile):
+			continue
+		# Founding needs a real group to found it: people_near counts
+		# citizens too, so a knot of another village's people far from
+		# home could otherwise found a village with no founders at all
+		# ("Kelholt · 0"). Only unassigned people can be founders.
+		var center := world.tile_to_world(tile.x, tile.y)
+		var founders_near := 0
+		for p in agents.agents:
+			if p.kind == SimAgent.Kind.PERSON and p.village < 0 and p.pos.distance_to(center) <= FOUND_RADIUS * GodSimWorld.TILE:
+				founders_near += 1
+		if founders_near < FOUND_PEOPLE:
 			continue
 		var village_name := _next_name()
 		if village_name == "":
@@ -100,16 +124,58 @@ func _try_found(current_day: int) -> void:
 		village_founded.emit(village_name)
 		# The people standing here are the founders — they belong to the
 		# new village from the moment it exists.
-		var center := world.tile_to_world(tile.x, tile.y)
 		for founder in agents.agents:
 			if founder.kind == SimAgent.Kind.PERSON and founder.village < 0 and founder.pos.distance_to(center) <= FOUND_RADIUS * GodSimWorld.TILE:
 				founder.village = new_index
 		return
 
-## Claim nomads: any person without a village who stands inside a
-## territory joins the nearest village whose border contains them.
-## (Assigned citizens keep their village even if they wander into
-## another territory — they belong where they were claimed or born.)
+## If the group at this tile stands close to an existing village, they
+## join it instead of founding: every unassigned person within
+## FOUND_RADIUS of the tile becomes a citizen of the nearest village
+## whose territory plus FOUND_JOIN_MARGIN reaches them. Returns true
+## when a join happened (one action per scan, same as founding).
+## The range uses the village's POPULATION radius, not its capped
+## territory: when neighbours crowd in, the cap shrinks the border,
+## and a group just outside that shrunken border would found a new
+## village right next door — the exact thing this rule exists to
+## prevent. The population radius is the village's real sphere of
+## influence.
+## This also covers a group standing inside a territory — founding
+## runs before claiming on the same tick, so without this check a
+## group inside a village's own land could found a second village
+## there.
+func _try_join_nearby_village(tile: Vector2i) -> bool:
+	var best: VillageData = null
+	var best_d := INF
+	for v in villages:
+		var d := Vector2(tile - v.tile).length()
+		if d < best_d:
+			best_d = d
+			best = v
+	if best == null:
+		return false
+	if best_d > influence_radius_tiles(best):
+		return false
+	var center := world.tile_to_world(tile.x, tile.y)
+	var idx := villages.find(best)
+	var joined := 0
+	for a in agents.agents:
+		if a.kind == SimAgent.Kind.PERSON and a.village < 0 and a.pos.distance_to(center) <= FOUND_RADIUS * GodSimWorld.TILE:
+			a.village = idx
+			joined += 1
+	if joined > 0:
+		people_joined.emit(best.name, joined)
+		return true
+	return false
+
+## Claim nomads: any person without a village who comes within a
+## village's sphere of influence joins the nearest such village —
+## inside its territory, or just outside it within the join margin.
+## This is what sweeps up stragglers: when a group joins a village,
+## the dense core joins at once and anyone who drifted a few tiles out
+## follows as soon as they wander near the border. (Assigned citizens
+## keep their village even if they wander into another territory —
+## they belong where they were claimed or born.)
 func _assign_people() -> void:
 	if agents == null or world == null:
 		return
@@ -121,7 +187,7 @@ func _assign_people() -> void:
 		for i in villages.size():
 			var v := villages[i]
 			var d := a.pos.distance_to(world.tile_to_world(v.tile.x, v.tile.y))
-			if d <= territory_radius_px(v) and d < best_d:
+			if d <= float(influence_radius_tiles(v) * GodSimWorld.TILE) and d < best_d:
 				best = i
 				best_d = d
 		if best >= 0:
@@ -158,6 +224,12 @@ func population_of(v: VillageData) -> int:
 			n += 1
 	return n
 
+## The territory radius from population alone, before the neighbour
+## cap — the village's natural size, used for its sphere of
+## influence (see _try_join_nearby_village).
+func _population_radius_tiles(v: VillageData) -> int:
+	return clampi(4 + population_of(v) / 3, MIN_TERRITORY, MAX_TERRITORY)
+
 ## A village's territory grows with its citizens: 4 tiles plus one per
 ## 3 citizens, between 5 and 10 tiles — but it never overlaps a
 ## neighbour's territory. The border between two villages sits at the
@@ -168,7 +240,7 @@ func population_of(v: VillageData) -> int:
 ## is safe: villages always found at least ~5.7 tiles apart, so half
 ## that distance is never below 2.
 func territory_radius_tiles(v: VillageData) -> int:
-	var r := clampi(4 + population_of(v) / 3, MIN_TERRITORY, MAX_TERRITORY)
+	var r := _population_radius_tiles(v)
 	var gap := _nearest_neighbour_gap_tiles(v)
 	if gap < INF:
 		r = mini(r, int(gap * 0.5))
@@ -184,6 +256,16 @@ func _nearest_neighbour_gap_tiles(v: VillageData) -> float:
 		if d < best:
 			best = d
 	return best
+
+## A village's sphere of influence: its population territory plus the
+## join margin. Nomads inside this range join the village (see
+## _assign_people); groups inside it join instead of founding (see
+## _try_join_nearby_village). Uses the population radius, not the
+## capped territory, so a crowded village's pull doesn't shrink with
+## its border — the cap is about drawing borders, not about who
+## belongs where.
+func influence_radius_tiles(v: VillageData) -> int:
+	return _population_radius_tiles(v) + FOUND_JOIN_MARGIN
 
 func territory_radius_px(v: VillageData) -> float:
 	return float(territory_radius_tiles(v) * GodSimWorld.TILE)
