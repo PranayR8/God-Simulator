@@ -46,6 +46,7 @@ var _last_paint_tile := Vector2i(-1, -1)
 @onready var agents: Agents = $Agents
 @onready var villages: Villages = $Villages
 @onready var powers: Powers = $Powers
+@onready var disasters: Disasters = $Disasters
 @onready var save_system: SaveSystem = $SaveSystem
 @onready var camera: Camera2D = $Camera2D
 @onready var hud: Hud = $HUD
@@ -59,12 +60,17 @@ func _ready() -> void:
 	powers.world = world
 	powers.agents = agents
 	powers.villages = villages
+	disasters.world = world
+	disasters.agents = agents
+	disasters.villages = villages
+	disasters.event_log = event_log
 	# History: villages and births report through signals; Main stamps
 	# the day and writes them into the log, and the HUD redraws.
 	agents.child_born.connect(_on_child_born)
 	agents.starved.connect(_on_starved)
 	agents.old_age_died.connect(_on_old_age_died)
 	agents.cold_died.connect(_on_cold_died)
+	agents.plague_died.connect(_on_plague_died)
 	villages.village_founded.connect(_on_village_founded)
 	villages.people_joined.connect(_on_people_joined)
 	villages.stage_changed.connect(_on_stage_changed)
@@ -135,7 +141,8 @@ func _do_tick() -> void:
 	if _last_season >= 0 and season != _last_season:
 		event_log.add(day, _season_arrival_text(season))
 	_last_season = season
-	world.tick(season)  # berries regrow (by season)
+	disasters.tick(day)  # warnings, starts, and endings of disasters
+	world.tick(season, day)  # berries regrow (by season), drought, fire
 	powers.tick_cooldowns()  # blessing cooldowns count down
 	agents.tick(TICK_INTERVAL, season, day)
 	villages.tick(day)
@@ -146,6 +153,7 @@ func _do_tick() -> void:
 func _update_hud() -> void:
 	hud.update_stats(day, GodSimWorld.season_name_for_day(day), agents.count_people(), villages.count(), agents.count_animals())
 	hud.update_cooldowns(powers.cooldowns)
+	hud.update_disaster_button(disasters.trigger_cooldown_remaining() > 0)
 
 ## What the log says when a season arrives.
 func _season_arrival_text(season: int) -> String:
@@ -346,6 +354,23 @@ func _apply_tool_at_screen(screen_pos: Vector2, is_start: bool) -> void:
 			if is_start:
 				_apply_blessing(tile)
 				_update_hud()
+		Hud.TOOL_DISASTER:
+			# Disasters are one deliberate tap each, never a drag — and
+			# a tap while the button recharges spends nothing.
+			if is_start:
+				_apply_disaster(tile)
+				_update_hud()
+
+# Phase 9 — unleash a disaster where the player tapped: a random
+# disaster (plague, drought, or wildfire) starts there. -1 means the
+# Disaster button is recharging (10 days); the kind started is logged
+# by the disaster system itself.
+func _apply_disaster(tile: Vector2i) -> void:
+	var result := disasters.trigger_random(tile, day)
+	if result < 0:
+		var left := disasters.trigger_cooldown_remaining()
+		var days := maxi(1, int(ceil(left / 120.0)))
+		hud.set_hint("The Disaster button is recharging — %d day(s) left." % days)
 
 ## A blessing tap: bless the person / village / land at this tile.
 ## -1 = the blessing is recharging, 0 = nothing there to bless,
@@ -406,6 +431,9 @@ func _on_starved(village_name: String) -> void:
 
 func _on_old_age_died(village_name: String) -> void:
 	event_log.add_old_age_death(day, village_name)
+
+func _on_plague_died(village_name: String) -> void:
+	event_log.add_plague_death(day, village_name)
 
 func _on_cold_died(village_name: String) -> void:
 	event_log.add_cold_death(day, village_name)
@@ -527,5 +555,13 @@ func _hint_for_tool(tool: String) -> String:
 			return "Lightning — smites creatures, scorches trees."
 		Hud.TOOL_METEOR:
 			return "Meteor — leaves a crater. Use responsibly."
+		Hud.TOOL_BLESS_PERSON:
+			return "Bless Person — tap a person: faster, stronger, longer-lived. Cooldown: 1 day."
+		Hud.TOOL_BLESS_VILLAGE:
+			return "Bless Village — tap inside a territory: it grows fast for a season. Cooldown: 5 days."
+		Hud.TOOL_FERTILE_RAIN:
+			return "Fertile Rain — tap the forest: berries grow at once. Cooldown: 1 day."
+		Hud.TOOL_DISASTER:
+			return "Disaster — tap to unleash a random disaster (plague, drought, or wildfire). Cooldown: 10 days."
 		_:
 			return ""

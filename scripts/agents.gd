@@ -53,6 +53,18 @@ var current_day: int = 1  # set by tick(); the village blessing is dated by day
 const BLESS_VILLAGE_BREED_MULT := 2.0
 const BLESS_VILLAGE_FARMER_BONUS := 1.0
 
+## Plague (Phase 9). A sick person is ill for 5 days (600 ticks). While
+## sick they lose health (0.15/tick = 90 over the sickness — a healthy
+## person survives at ~10, anyone below 90 health dies) and cannot
+## recover, so the plague kills the weak. It spreads to anyone standing
+## within 30px (the same closeness as breeding): each sick neighbour is
+## a 0.002 chance per tick, so in a crowd it rips through the village
+## and in a sparse settlement it barely moves.
+const PLAGUE_DURATION := 600.0
+const PLAGUE_DRAIN_PER_TICK := 0.15
+const PLAGUE_SPREAD_RADIUS := 30.0
+const PLAGUE_SPREAD_CHANCE := 0.002
+
 var agents: Array[SimAgent] = []
 var world: GodSimWorld = null
 var villages: Villages = null  # set by Main; used to keep citizens near home
@@ -64,6 +76,7 @@ signal child_born(village_name: String)
 ## Emitted when someone freezes to death in winter (Phase 7).
 ## village_name is "" for a nomad; Main logs it.
 signal cold_died(village_name: String)
+signal plague_died(village_name: String)
 
 ## Emitted when a person dies of starvation. village_name is "" for a
 ## nomad; Main logs it (aggregated per village per day, like births).
@@ -137,12 +150,16 @@ func tick(dt: float, p_season: int, p_day: int) -> void:
 			if _update_cold(a):
 				# Froze to death — same removal, same rule.
 				continue
+			if _update_plague(a):
+				# Died of plague — same removal, same rule.
+				continue
 			_try_eat(a)
 		_move_agent(a, dt)
 		if a.kind == SimAgent.Kind.PERSON and a.job >= 0 and not a.is_child():
 			_do_job(a)
 		i += 1
 	_try_breed()
+	_spread_plague()
 	queue_redraw()
 
 ## A citizen's work. Farmers harvest food into the village store (one
@@ -175,7 +192,7 @@ func _do_job(a: SimAgent) -> void:
 		# bumper crop to carry the village through winter); Winter
 		# grows nothing (the land is frozen), so the village lives off
 		# what it stored. Spring and Summer are the normal 1 unit.
-		if _has_forest_in_inner_half(v, radius * 0.5) and season != GodSimWorld.SEASON_WINTER:
+		if _has_forest_in_inner_half(v, radius * 0.5) and season != GodSimWorld.SEASON_WINTER and not world.is_drought():
 			var gain := 1.0
 			if season == GodSimWorld.SEASON_AUTUMN:
 				gain = HARVEST_AUTUMN_FOOD
@@ -256,7 +273,7 @@ func _update_hunger(a: SimAgent) -> bool:
 		# Fed: slowly recover any health lost to an earlier hunger spell
 		# — unless the winter cold is biting (an unprotected person
 		# doesn't recover in winter; see _update_cold).
-		if not (season == GodSimWorld.SEASON_WINTER and _winter_protection(a) < 1.0):
+		if not (season == GodSimWorld.SEASON_WINTER and _winter_protection(a) < 1.0) and a.sick <= 0.0:
 			var regen := HEALTH_REGEN_PER_TICK
 			if a.blessed:
 				regen *= SimAgent.BLESS_REGEN_MULT
@@ -279,6 +296,63 @@ func _winter_protection(a: SimAgent) -> float:
 		if villages.stage_of(v) >= 2:
 			return 0.5
 	return 0.0
+
+## Plague (Phase 9). A sick person drains health and cannot recover
+## (see _update_hunger, which skips the regen while sick). When the
+## sickness runs out they recover and are immune for life. Returns true
+## if they died of plague (and removes them from the list).
+func _update_plague(a: SimAgent) -> bool:
+	if a.sick <= 0.0:
+		return false
+	a.sick -= 1.0
+	if a.sick > 0.0:
+		a.health -= PLAGUE_DRAIN_PER_TICK
+		if a.health <= 0.0:
+			var home_name := ""
+			if a.village >= 0 and villages != null and a.village < villages.villages.size():
+				home_name = villages.villages[a.village].name
+			agents.erase(a)
+			plague_died.emit(home_name)
+			return true
+		return false
+	# The sickness ran its course — recovered, and immune for life.
+	a.immune = true
+	return false
+
+## One tick of plague spreading: each sick person can pass it to anyone
+## standing close (within PLAGUE_SPREAD_RADIUS). A crowd is a chain of
+## infections; a sparse settlement has no chain, so it burns out fast.
+func _spread_plague() -> void:
+	for a in agents.duplicate():
+		if a.kind != SimAgent.Kind.PERSON or a.sick <= 0.0:
+			continue
+		for b in agents:
+			if b.kind != SimAgent.Kind.PERSON or b.sick > 0.0 or b.immune:
+				continue
+			if a.pos.distance_to(b.pos) <= PLAGUE_SPREAD_RADIUS and _rng.randf() < PLAGUE_SPREAD_CHANCE:
+				b.sick = PLAGUE_DURATION
+
+## Infect everyone healthy (and not immune) within radius_px of a point.
+## Returns how many were infected — the way a plague is started, by the
+## disaster system or the player's Disaster button.
+func infect_at(pos: Vector2, radius_px: float) -> int:
+	var count := 0
+	for a in agents:
+		if a.kind != SimAgent.Kind.PERSON or a.sick > 0.0 or a.immune:
+			continue
+		if a.pos.distance_to(pos) <= radius_px:
+			a.sick = PLAGUE_DURATION
+			count += 1
+	return count
+
+## How many people are currently sick (the disaster system watches this
+## to know when a plague has burned out).
+func count_sick() -> int:
+	var n := 0
+	for a in agents:
+		if a.kind == SimAgent.Kind.PERSON and a.sick > 0.0:
+			n += 1
+	return n
 
 ## Winter cold (Phase 7). In Winter, a person without shelter or food
 ## loses health to the cold. A stocked store fully protects them; a
@@ -558,6 +632,13 @@ func _draw_person(a: SimAgent) -> void:
 		var sc0 := 0.62 if a.is_child() else 1.0
 		draw_circle(p, 13.0 * sc0, Color(1.0, 0.85, 0.2, 0.45))
 		draw_arc(p, 10.0 * sc0, 0, TAU, 24, Color(1.0, 0.85, 0.2, 1.0), 2.5 * sc0)
+	# Phase 9 — a sick person shows it: a sickly yellow-green glow, the
+	# mirror of the blessed gold. The colour is a vivid lime, not a
+	# grass green, so the ill stand out from the land they walk on.
+	if a.sick > 0.0:
+		var sc1 := 0.62 if a.is_child() else 1.0
+		draw_circle(p, 12.0 * sc1, Color(0.65, 0.9, 0.15, 0.5))
+		draw_arc(p, 9.0 * sc1, 0, TAU, 24, Color(0.65, 0.9, 0.15, 1.0), 2.5 * sc1)
 	var skin := SimAgent.PERSON_COLOR
 	var dark := Color("#5a4632")
 	var sc := 0.62 if a.is_child() else 1.0

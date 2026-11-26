@@ -30,6 +30,7 @@ const TOOL_METEOR := "meteor"
 const TOOL_BLESS_PERSON := "bless_person"
 const TOOL_BLESS_VILLAGE := "bless_village"
 const TOOL_FERTILE_RAIN := "fertile_rain"
+const TOOL_DISASTER := "disaster"
 
 var current_tool: String = TOOL_PAINT_GRASS
 var brush_wide: bool = false
@@ -73,6 +74,7 @@ func _ready() -> void:
 		TOOL_BLESS_PERSON: $BottomBar/Margin/ToolGrid/ToolBlessPerson,
 		TOOL_BLESS_VILLAGE: $BottomBar/Margin/ToolGrid/ToolBlessVillage,
 		TOOL_FERTILE_RAIN: $BottomBar/Margin/ToolGrid/ToolFertileRain,
+		TOOL_DISASTER: $BottomBar/Margin/ToolGrid/ToolDisaster,
 	}
 	# Which Power enum each blessing tool maps to, for the cooldown
 	# display (update_cooldowns greys a button out while it recharges).
@@ -114,6 +116,16 @@ func set_hint(text: String) -> void:
 ## Grey out a blessing's button while it recharges (and light it back
 ## up when ready). Only touches a button when its state actually
 ## changed, so this can run every tick without flicker.
+## Grey the Disaster button out while it recharges (10 days after the
+## player unleashes one). Change-only, like update_cooldowns — the
+## button is only touched when its state actually changes.
+func update_disaster_button(on_cooldown: bool) -> void:
+	if _last_cooldown_state.get(TOOL_DISASTER, false) == on_cooldown:
+		return
+	_last_cooldown_state[TOOL_DISASTER] = on_cooldown
+	var button: Button = _tool_buttons[TOOL_DISASTER]
+	button.disabled = on_cooldown
+
 func update_cooldowns(cooldowns: Dictionary) -> void:
 	for tool in _tool_powers:
 		var power: int = _tool_powers[tool]

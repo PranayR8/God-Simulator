@@ -115,6 +115,29 @@ func _old_age_text(village_name: String, count: int) -> String:
 ## A death by winter cold (village_name "" = nomad). Aggregated like
 ## the other deaths: several freezing in one village on one day become
 ## one line, or a hard winter would flood the log.
+func add_plague_death(day: int, village_name: String) -> void:
+	if not entries.is_empty():
+		var last: Dictionary = entries[entries.size() - 1]
+		if String(last.get("kind", "")) == "plague" \
+				and int(last.get("day", -1)) == day \
+				and String(last.get("village", "")) == village_name:
+			var count := int(last.get("count", 1)) + 1
+			last["count"] = count
+			last["text"] = _plague_text(village_name, count)
+			changed.emit()
+			return
+	entries.append({
+		"day": day, "text": _plague_text(village_name, 1), "kind": "plague",
+		"village": village_name, "count": 1,
+	})
+	_trim()
+	changed.emit()
+
+func _plague_text(village_name: String, count: int) -> String:
+	if village_name == "":
+		return "A nomad died of plague" if count == 1 else "%d nomads died of plague" % count
+	return "A villager of %s died of plague" % village_name if count == 1 else "%d villagers of %s died of plague" % [count, village_name]
+
 func add_cold_death(day: int, village_name: String) -> void:
 	if not entries.is_empty():
 		var last: Dictionary = entries[entries.size() - 1]

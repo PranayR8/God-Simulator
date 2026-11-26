@@ -80,6 +80,16 @@ into a real mobile app.
   at 65 citizens (a City) against 28, with a food store of 496 against
   112. Blessings show up in the History ("Wilwick was blessed — it
   will grow fast this season").
+- **Disasters**: the world can hurt itself — and so can you. **Plague**
+  spreads between people standing close (a sickly green glow marks the
+  ill) and kills the weak; the survivors recover immune, so it burns
+  out instead of lingering. **Drought** stops all food growth for a
+  season and shrinks the lakes a tile at a time. **Wildfire** walks
+  through the forest, leaving scorched land behind — rain puts it out.
+  Random disasters arrive every few weeks with a day's warning in the
+  History, and the **Disaster** button lets you unleash a random one
+  where you tap (10-day cooldown). A crowded village hit by plague
+  lost half its people; a sparse settlement barely noticed it.
   (Wilwick, Kelholt, Bramley…) that grows houses and population over time.
   Every village owns a territory — a coloured border that grows with its
   citizens and stops at the halfway point to its nearest neighbour, so

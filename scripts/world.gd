@@ -55,6 +55,50 @@ static func season_name_for_day(day: int) -> String:
 
 ## The season right now (set by tick; day 1 is Spring).
 var season: int = SEASON_SPRING
+var current_day: int = 1  # set by tick(); the drought and the fire are dated by day
+
+## Drought (Phase 9). drought_until_day is the first day the drought
+## has ended (0 = no drought). While it runs, no food grows — berries
+## do not regrow and farmers produce nothing — and the lakes shrink a
+## little every day (water tiles at the edge turn to grass).
+const DROUGHT_DAYS := 15  # one season
+var drought_until_day: int = 0
+var _drought_counter := 0  # ticks since the last lake tile shrank
+
+## Wildfire (Phase 9). burning maps a tile to the ticks of fire left
+## on it (a tile burns for a day, then is left scorched). Each tick a
+## burning tile can ignite each adjacent forest tile, so a fire walks
+## through a forest and ends when it runs out of fuel.
+const FIRE_BURN_TICKS := 120  # 1 day of fire per tile
+const FIRE_SPREAD_CHANCE := 0.02  # per tick, per adjacent forest tile
+var burning: Dictionary = {}
+
+func is_drought() -> bool:
+	return current_day < drought_until_day
+
+func start_drought(day: int) -> void:
+	drought_until_day = day + DROUGHT_DAYS
+	queue_redraw()
+
+## Start a fire on a forest tile. Returns false when the tile is not
+## forest (or is already burning) — the fire needs fuel to catch.
+func ignite(tile: Vector2i) -> bool:
+	if not in_bounds(tile.x, tile.y):
+		return false
+	if get_terrain(tile.x, tile.y) != Terrain.FOREST:
+		return false
+	if burning.has(tile):
+		return false
+	burning[tile] = FIRE_BURN_TICKS
+	queue_redraw()
+	return true
+
+## Put a fire out (rain does this) — the tile is left as grass.
+func extinguish(tile: Vector2i) -> void:
+	if burning.has(tile):
+		burning.erase(tile)
+		set_terrain(tile.x, tile.y, Terrain.GRASS)
+		queue_redraw()
 
 var _rng := RandomNumberGenerator.new()
 var _regrow_counter := 0
@@ -139,15 +183,21 @@ func add_berry(tile: Vector2i) -> bool:
 	queue_redraw()
 	return true
 
-## One simulation tick: berries regrow. Every _regrow_interval ticks,
-## each forest tile below the maximum gains one berry. The interval
-## follows the season (Phase 7): Spring grows fast (45), Summer is the
-## peak (30), Autumn is normal (60), and Winter grows nothing at all.
-## The season is passed in by Main (it owns the day count).
-func tick(p_season: int) -> void:
+## One simulation tick: berries regrow, the drought bites, the fire
+## spreads. The interval follows the season (Phase 7): Spring grows
+## fast (45), Summer is the peak (30), Autumn is normal (60), and
+## Winter grows nothing at all. A drought (Phase 9) also grows nothing
+## — and shrinks the lakes a tile at a time. The day is passed in by
+## Main (it owns the day count).
+func tick(p_season: int, p_day: int) -> void:
+	current_day = p_day
 	if p_season != season:
 		season = p_season
 		queue_redraw()  # the map tint changes with the season
+	_tick_fire()
+	if is_drought():
+		_tick_drought()
+		return  # Drought: nothing grows.
 	var interval := _regrow_interval(season)
 	if interval <= 0:
 		return  # Winter: nothing grows.
@@ -162,6 +212,55 @@ func tick(p_season: int) -> void:
 				var n := berries_at(t)
 				if n < BERRY_MAX:
 					berries[t] = n + 1
+	queue_redraw()
+
+## Drought (Phase 9): every 30 ticks one water tile at the edge of a
+## lake dries up and turns to grass — about 4 a day, 60 over the
+## season, so the lakes visibly shrink without a small one vanishing
+## overnight. The loss lasts (rain does not refill a lake).
+func _tick_drought() -> void:
+	_drought_counter += 1
+	if _drought_counter < 30:
+		return
+	_drought_counter = 0
+	for tries in 40:
+		var x := _rng.randi_range(1, WIDTH - 2)
+		var y := _rng.randi_range(1, HEIGHT - 2)
+		if get_terrain(x, y) != Terrain.WATER:
+			continue
+		if not _has_land_neighbour(x, y):
+			continue
+		set_terrain(x, y, Terrain.GRASS)
+		queue_redraw()
+		return
+
+func _has_land_neighbour(x: int, y: int) -> bool:
+	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		if get_terrain(x + d.x, y + d.y) != Terrain.WATER:
+			return true
+	return false
+
+## Wildfire (Phase 9): each burning tile counts down, and while it burns
+## it can ignite each adjacent forest tile. When a tile's fire runs out
+## it is left scorched. The fire ends when it runs out of forest to
+## catch — or when rain puts it out.
+func _tick_fire() -> void:
+	if burning.is_empty():
+		return
+	var tiles: Array = burning.keys()
+	for t in tiles:
+		var tile: Vector2i = t
+		var left: int = int(burning[tile]) - 1
+		if left <= 0:
+			burning.erase(tile)
+			set_terrain(tile.x, tile.y, Terrain.SCORCHED)
+		else:
+			burning[tile] = left
+			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var n := Vector2i(tile.x + d.x, tile.y + d.y)
+				if in_bounds(n.x, n.y) and get_terrain(n.x, n.y) == Terrain.FOREST and not burning.has(n):
+					if _rng.randf() < FIRE_SPREAD_CHANCE:
+						burning[n] = FIRE_BURN_TICKS
 	queue_redraw()
 
 ## Ticks between berry regrowths, by season. Winter returns 0 (never).
@@ -238,9 +337,22 @@ func _draw() -> void:
 	# pale blue-white (snow). Drawn last in the World's own layer, so it
 	# tints the land but the villages and people drawn on top of it stay
 	# bright and readable.
+	# Phase 9 — burning tiles: an orange flame with a yellow heart, so
+	# a wildfire reads at a glance.
+	for t in burning.keys():
+		var tile: Vector2i = t
+		var c := Vector2((tile.x + 0.5) * TILE, (tile.y + 0.5) * TILE)
+		draw_circle(c, 12.0, Color(1.0, 0.5, 0.1, 0.75))
+		draw_circle(c, 6.0, Color(1.0, 0.85, 0.2, 0.9))
 	var tint := _season_tint(season)
 	if tint.a > 0.0:
 		draw_rect(Rect2(0, 0, WIDTH * TILE, HEIGHT * TILE), tint)
+	# Phase 9 — a drought parches the map: a dry brown tint over the
+	# season's own, so a drought looks different from any season. It
+	# is as strong as Winter's tint — a drought should read at a
+	# glance, not just in the log.
+	if is_drought():
+		draw_rect(Rect2(0, 0, WIDTH * TILE, HEIGHT * TILE), Color(0.7, 0.55, 0.25, 0.20))
 
 ## The season's tint over the whole map. Spring is barely there (the
 ## base grass green already reads as spring); Winter is the strongest,

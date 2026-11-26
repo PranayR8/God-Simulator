@@ -22,6 +22,8 @@ func save_game(world: GodSimWorld, agents: Agents, villages: Villages, event_log
 		"terrain": world.terrain,
 		"berries": _berries_to_data(world),
 		"agents": _agents_to_data(agents),
+		"drought_until": world.drought_until_day,
+		"burning": _burning_to_data(world),
 		"villages": _villages_to_data(villages),
 		"log": event_log.to_data(),
 	}
@@ -57,7 +59,7 @@ func _agents_to_data(agents: Agents) -> Array:
 		# are likewise stored for everyone (sheep keep 0, which they
 		# ignore) so a loaded world keeps its generations instead of
 		# resetting everyone to a newborn.
-		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job, "blessed": a.blessed})
+		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job, "blessed": a.blessed, "sick": a.sick, "immune": a.immune})
 	return out
 
 ## Berries as a flat list of [x, y, count] triples (only tiles that
@@ -67,6 +69,14 @@ func _berries_to_data(world: GodSimWorld) -> Array:
 	for tile in world.berries.keys():
 		var t: Vector2i = tile
 		out.append([t.x, t.y, int(world.berries[t])])
+	return out
+
+## Burning tiles as a flat list of [x, y, ticks-left] triples.
+func _burning_to_data(world: GodSimWorld) -> Array:
+	var out: Array = []
+	for tile in world.burning.keys():
+		var t: Vector2i = tile
+		out.append([t.x, t.y, int(world.burning[t])])
 	return out
 
 func _villages_to_data(villages: Villages) -> Array:
@@ -99,6 +109,14 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 				world.berries[Vector2i(int(triple[0]), int(triple[1]))] = int(triple[2])
 	else:
 		world.rebuild_berries()
+	# Phase 9 — a drought in progress, and any fire still burning, carry
+	# over a save (old saves have neither: no drought, no fire).
+	world.drought_until_day = int(data.get("drought_until", 0))
+	world.burning.clear()
+	for item in data.get("burning", []):
+		var triple: Array = item
+		if triple.size() == 3:
+			world.burning[Vector2i(int(triple[0]), int(triple[1]))] = int(triple[2])
 	agents.clear_all()
 	for item in data.get("agents", []):
 		var d: Dictionary = item
@@ -116,6 +134,8 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		# at the next scan.
 		na.job = int(d.get("job", -1))
 		na.blessed = bool(d.get("blessed", false))
+		na.sick = float(d.get("sick", 0.0))
+		na.immune = bool(d.get("immune", false))
 		agents.agents.append(na)
 	villages.clear_all()
 	for item in data.get("villages", []):

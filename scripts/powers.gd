@@ -93,7 +93,11 @@ func _apply_rain(center: Vector2i) -> void:
 			if not world.in_bounds(x, y):
 				continue
 			var t := world.get_terrain(x, y)
-			if t == GodSimWorld.Terrain.SCORCHED:
+			if world.burning.has(Vector2i(x, y)):
+				# Phase 9 — rain puts a wildfire out (the tile is left
+				# as grass, not scorched: the fire never got to burn it).
+				world.extinguish(Vector2i(x, y))
+			elif t == GodSimWorld.Terrain.SCORCHED:
 				world.set_terrain(x, y, GodSimWorld.Terrain.GRASS)
 			elif t == GodSimWorld.Terrain.GRASS and _rng.randf() < 0.35:
 				world.set_terrain(x, y, GodSimWorld.Terrain.FOREST)

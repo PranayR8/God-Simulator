@@ -69,6 +69,14 @@ var village: int = -1  # index into Villages.villages; -1 = no village yet (a no
 ## faster, recover health faster, and live longer. The blessing is for
 ## life — it is set when the god blesses them and never wears off.
 var blessed: bool = false
+
+## Plague (Phase 9). sick is the ticks of sickness remaining (0 =
+## healthy); while sick, the person drains health and cannot recover,
+## and can pass it to anyone standing close. When the sickness runs
+## out they recover and are immune for life — that is how a plague
+## burns out instead of lingering forever.
+var sick: float = 0.0
+var immune: bool = false
 const BLESS_SPEED_MULT := 1.5    # blessed people walk half again as fast
 const BLESS_REGEN_MULT := 3.0    # blessed people recover health 3x as fast
 const BLESS_LIFESPAN_MULT := 1.5 # blessed people live half again as long
