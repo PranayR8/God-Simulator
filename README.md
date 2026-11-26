@@ -27,6 +27,12 @@ into a real mobile app.
   creatures, scorches trees), Meteor (crater, kills in a radius).
 - **Simulation**: pause/play, 1×/2×/4× speed, tick-based. The HUD shows
   Day, People, Villages, and Animals live.
+- **History (event log)**: a panel in the top-left records what happened,
+  newest first — villages founded, children born (summarised per village
+  per day, so births don't flood the log), lightning and meteor strikes
+  with how many died, rain. Collapsed it shows just the latest event;
+  tap Show to scroll the full history (last 50 events). The log is
+  saved with the world and comes back when you reload.
 - **Camera**: zoom in/out buttons, pinch to zoom, two-finger drag to pan
   (right/middle-drag and mouse wheel on desktop), Fit button.
 - **Save/load**: autosaves every ~10 seconds, plus a Save button, to
@@ -46,8 +52,9 @@ scripts/
   agents.gd            Movement, breeding, drawing of all creatures
   village.gd           Village founding, growth, territories, citizens, drawing
   powers.gd            Rain / Lightning / Meteor effects
+  event_log.gd         The world's history (dated events, birth aggregation)
   save_system.gd       JSON save/load (user://world.json)
-  hud.gd               Top bar, tool toolbar, buttons — signals only
+  hud.gd               Top bar, tool toolbar, history panel — signals only
 ```
 
 ## Install Godot and run it

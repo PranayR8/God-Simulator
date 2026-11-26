@@ -274,5 +274,5 @@ by name.
 
 ## Status
 
-- Phase 0 — done (Nov 26, 2026). Phases 1–14 — not started.
-- Next up: Phase 1, Event log.
+- Phase 0 — done (Nov 26, 2026). Phase 1 (event log) — done (Nov 26, 2026): History panel, founding/birth/power lines, birth aggregation, save/load of the log; verified by a deterministic headless test and a live browser playthrough (6 villages, 13 log entries in 6 days, zero errors). Phases 2–14 — not started.
+- Next up: Phase 2, Hunger & food.
