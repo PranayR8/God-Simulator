@@ -1,0 +1,164 @@
+class_name Agents
+extends Node2D
+
+## Owns every living agent: movement, reproduction, and drawing.
+## The world (GodSimWorld) answers "is this tile walkable?" — agents prefer
+## grass and forest and never walk on water or mountains.
+
+const MAX_PEOPLE := 260
+const MAX_SHEEP := 140
+const BREED_TIME := 60.0  # ticks of cooldown after breeding (15s at 1x)
+const BREED_CHANCE := 0.003  # per tick, per agent standing next to a mate
+
+var agents: Array[SimAgent] = []
+var world: GodSimWorld = null
+
+var _rng := RandomNumberGenerator.new()
+
+func _ready() -> void:
+	_rng.randomize()
+
+func count_people() -> int:
+	var n := 0
+	for a in agents:
+		if a.kind == SimAgent.Kind.PERSON:
+			n += 1
+	return n
+
+func count_animals() -> int:
+	var n := 0
+	for a in agents:
+		if a.kind == SimAgent.Kind.SHEEP:
+			n += 1
+	return n
+
+func clear_all() -> void:
+	agents.clear()
+	queue_redraw()
+
+func spawn(kind: int, tile: Vector2i) -> void:
+	if not world.is_walkable(tile.x, tile.y):
+		return
+	agents.append(SimAgent.new(kind, world.tile_to_world(tile.x, tile.y)))
+	queue_redraw()
+
+func spawn_scattered(kind: int, count: int) -> void:
+	for i in count:
+		var tile := random_walkable_tile()
+		if tile.x >= 0:
+			spawn(kind, tile)
+
+func random_walkable_tile() -> Vector2i:
+	for attempt in 60:
+		var x := _rng.randi_range(0, GodSimWorld.WIDTH - 1)
+		var y := _rng.randi_range(0, GodSimWorld.HEIGHT - 1)
+		if world.is_walkable(x, y):
+			return Vector2i(x, y)
+	return Vector2i(-1, -1)
+
+## One simulation tick: move everyone, then maybe breed.
+## dt is the tick length in seconds (used for movement).
+func tick(dt: float) -> void:
+	var i := 0
+	while i < agents.size():
+		var a := agents[i]
+		a.age += 1.0
+		a.breed_cooldown = maxf(0.0, a.breed_cooldown - 1.0)
+		_move_agent(a, dt)
+		i += 1
+	_try_breed()
+	queue_redraw()
+
+func _move_agent(a: SimAgent, dt: float) -> void:
+	if not a.has_target or a.pos.distance_to(a.target) < 4.0:
+		a.target = _pick_target(a)
+		a.has_target = true
+	var dir := (a.target - a.pos).normalized()
+	a.pos += dir * a.speed() * dt
+	# Stay inside the map.
+	a.pos.x = clampf(a.pos.x, 4.0, GodSimWorld.WIDTH * GodSimWorld.TILE - 4.0)
+	a.pos.y = clampf(a.pos.y, 4.0, GodSimWorld.HEIGHT * GodSimWorld.TILE - 4.0)
+
+## Pick a nearby walkable tile to walk to. People like grass and forest;
+## sheep only really like grass. Water and mountains are never picked.
+func _pick_target(a: SimAgent) -> Vector2:
+	var tile := world.world_to_tile(a.pos)
+	for attempt in 8:
+		var nx := tile.x + _rng.randi_range(-4, 4)
+		var ny := tile.y + _rng.randi_range(-4, 4)
+		if not world.in_bounds(nx, ny):
+			continue
+		var t := world.get_terrain(nx, ny)
+		if t == GodSimWorld.Terrain.WATER or t == GodSimWorld.Terrain.MOUNTAIN:
+			continue
+		if a.kind == SimAgent.Kind.SHEEP and t == GodSimWorld.Terrain.FOREST:
+			continue
+		return world.tile_to_world(nx, ny)
+	return a.pos
+
+func _try_breed() -> void:
+	# A creature breeds when it stands next to another of its kind on good
+	# land, its cooldown has expired, and the population cap allows it.
+	# (We iterate a copy of the list because breeding appends to it.)
+	var people := count_people()
+	var sheep := count_animals()
+	for a in agents.duplicate():
+		if a.breed_cooldown > 0.0:
+			continue
+		var cap := MAX_PEOPLE if a.kind == SimAgent.Kind.PERSON else MAX_SHEEP
+		var total := people if a.kind == SimAgent.Kind.PERSON else sheep
+		if total >= cap:
+			continue
+		var tile := world.world_to_tile(a.pos)
+		var t := world.get_terrain(tile.x, tile.y)
+		if t != GodSimWorld.Terrain.GRASS and t != GodSimWorld.Terrain.FOREST:
+			continue
+		if _has_neighbour(a, 30.0) and _rng.randf() < BREED_CHANCE:
+			agents.append(SimAgent.new(
+				a.kind,
+				a.pos + Vector2(_rng.randf_range(-8, 8), _rng.randf_range(-8, 8))
+			))
+			a.breed_cooldown = BREED_TIME
+			if a.kind == SimAgent.Kind.PERSON:
+				people += 1
+			else:
+				sheep += 1
+
+func _has_neighbour(a: SimAgent, radius: float) -> bool:
+	for other in agents:
+		if other != a and other.kind == a.kind and other.pos.distance_to(a.pos) < radius:
+			return true
+	return false
+
+## Remove every agent within radius_px of a point. Returns how many died.
+func kill_in_radius(center: Vector2, radius_px: float) -> int:
+	var dead := 0
+	var i := agents.size() - 1
+	while i >= 0:
+		if agents[i].pos.distance_to(center) <= radius_px:
+			agents.remove_at(i)
+			dead += 1
+		i -= 1
+	if dead > 0:
+		queue_redraw()
+	return dead
+
+## How many people stand within radius_tiles of a tile (used by villages).
+func people_near(tile: Vector2i, radius_tiles: int) -> int:
+	var center := world.tile_to_world(tile.x, tile.y)
+	var n := 0
+	for a in agents:
+		if a.kind == SimAgent.Kind.PERSON and a.pos.distance_to(center) <= radius_tiles * GodSimWorld.TILE:
+			n += 1
+	return n
+
+func _draw() -> void:
+	for a in agents:
+		if a.kind == SimAgent.Kind.PERSON:
+			draw_circle(a.pos, 5.0, SimAgent.PERSON_COLOR)
+			draw_arc(a.pos, 5.0, 0, TAU, 12, Color("#8a6d3b"), 1.5)
+		else:
+			# Sheep: white body, dark head dot.
+			draw_circle(a.pos, 5.0, SimAgent.SHEEP_COLOR)
+			draw_arc(a.pos, 5.0, 0, TAU, 12, Color("#9a9a9a"), 1.5)
+			draw_circle(a.pos + Vector2(3, -2), 2.0, Color("#3a3a3a"))

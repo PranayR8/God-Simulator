@@ -1,0 +1,236 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/world.gd" id="2_world"]
+[ext_resource type="Script" path="res://scripts/agents.gd" id="3_agents"]
+[ext_resource type="Script" path="res://scripts/village.gd" id="4_village"]
+[ext_resource type="Script" path="res://scripts/powers.gd" id="5_powers"]
+[ext_resource type="Script" path="res://scripts/save_system.gd" id="6_save"]
+[ext_resource type="Script" path="res://scripts/hud.gd" id="7_hud"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="World" type="Node2D" parent="."]
+script = ExtResource("2_world")
+
+[node name="Agents" type="Node2D" parent="."]
+script = ExtResource("3_agents")
+
+[node name="Villages" type="Node2D" parent="."]
+script = ExtResource("4_village")
+
+[node name="Powers" type="Node2D" parent="."]
+script = ExtResource("5_powers")
+
+[node name="SaveSystem" type="Node" parent="."]
+script = ExtResource("6_save")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(768, 576)
+enabled = true
+
+[node name="HUD" type="CanvasLayer" parent="."]
+script = ExtResource("7_hud")
+
+[node name="TopBar" type="PanelContainer" parent="HUD"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 64.0
+grow_horizontal = 2
+
+[node name="Margin" type="MarginContainer" parent="HUD/TopBar"]
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 6
+
+[node name="HBox" type="HBoxContainer" parent="HUD/TopBar/Margin"]
+theme_override_constants/separation = 10
+
+[node name="DayLabel" type="Label" parent="HUD/TopBar/Margin/HBox"]
+theme_override_font_sizes/font_size = 22
+text = "Day 1"
+vertical_alignment = 1
+
+[node name="PeopleLabel" type="Label" parent="HUD/TopBar/Margin/HBox"]
+theme_override_font_sizes/font_size = 22
+text = "People 0"
+vertical_alignment = 1
+
+[node name="VillagesLabel" type="Label" parent="HUD/TopBar/Margin/HBox"]
+theme_override_font_sizes/font_size = 22
+text = "Villages 0"
+vertical_alignment = 1
+
+[node name="AnimalsLabel" type="Label" parent="HUD/TopBar/Margin/HBox"]
+theme_override_font_sizes/font_size = 22
+text = "Animals 0"
+vertical_alignment = 1
+
+[node name="Spacer" type="Control" parent="HUD/TopBar/Margin/HBox"]
+size_flags_horizontal = 3
+
+[node name="PauseButton" type="Button" parent="HUD/TopBar/Margin/HBox"]
+custom_minimum_size = Vector2(72, 44)
+focus_mode = 0
+theme_override_font_sizes/font_size = 20
+text = "Pause"
+
+[node name="SpeedButton" type="Button" parent="HUD/TopBar/Margin/HBox"]
+custom_minimum_size = Vector2(56, 44)
+focus_mode = 0
+theme_override_font_sizes/font_size = 20
+text = "1x"
+
+[node name="SaveButton" type="Button" parent="HUD/TopBar/Margin/HBox"]
+custom_minimum_size = Vector2(64, 44)
+focus_mode = 0
+theme_override_font_sizes/font_size = 20
+text = "Save"
+
+[node name="NewButton" type="Button" parent="HUD/TopBar/Margin/HBox"]
+custom_minimum_size = Vector2(64, 44)
+focus_mode = 0
+theme_override_font_sizes/font_size = 20
+text = "New"
+
+[node name="ZoomBox" type="VBoxContainer" parent="HUD"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -72.0
+offset_top = 76.0
+offset_right = -12.0
+offset_bottom = 244.0
+grow_horizontal = 0
+theme_override_constants/separation = 8
+
+[node name="ZoomInButton" type="Button" parent="HUD/ZoomBox"]
+custom_minimum_size = Vector2(60, 52)
+focus_mode = 0
+theme_override_font_sizes/font_size = 26
+text = "+"
+
+[node name="ZoomFitButton" type="Button" parent="HUD/ZoomBox"]
+custom_minimum_size = Vector2(60, 52)
+focus_mode = 0
+theme_override_font_sizes/font_size = 18
+text = "Fit"
+
+[node name="ZoomOutButton" type="Button" parent="HUD/ZoomBox"]
+custom_minimum_size = Vector2(60, 52)
+focus_mode = 0
+theme_override_font_sizes/font_size = 26
+text = "-"
+
+[node name="HintLabel" type="Label" parent="HUD"]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -340.0
+offset_top = -172.0
+offset_right = 340.0
+offset_bottom = -146.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.9)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 18
+text = "Paint terrain, then spawn people"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="BottomBar" type="PanelContainer" parent="HUD"]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -136.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="Margin" type="MarginContainer" parent="HUD/BottomBar"]
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="ToolGrid" type="GridContainer" parent="HUD/BottomBar/Margin"]
+columns = 5
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+
+[node name="ToolGrass" type="Button" parent="HUD/BottomBar/Margin/ToolGrid"]
+custom_minimum_size = Vector2(120, 52)
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_font_sizes/font_size = 18
+text = "Grass"
+
+[node name="ToolWater" type="Button" parent="HUD/BottomBar/Margin/ToolGrid"]
+custom_minimum_size = Vector2(120, 52)
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_font_sizes/font_size = 18
+text = "Water"
+
+[node name="ToolForest" type="Button" parent="HUD/BottomBar/Margin/ToolGrid"]
+custom_minimum_size = Vector2(120, 52)
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_font_sizes/font_size = 18
+text = "Forest"
+
+[node name="ToolMountain" type="Button" parent="HUD/BottomBar/Margin/ToolGrid"]
+custom_minimum_size = Vector2(120, 52)
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_font_sizes/font_size = 18
+text = "Mountain"
+
+[node name="ToolPerson" type="Button" parent="HUD/BottomBar/Margin/ToolGrid"]
+custom_minimum_size = Vector2(120, 52)
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_font_sizes/font_size = 18
+text = "Person"
+
+[node name="ToolSheep" type="Button" parent="HUD/BottomBar/Margin/ToolGrid"]
+custom_minimum_size = Vector2(120, 52)
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_font_sizes/font_size = 18
+text = "Sheep"
+
+[node name="ToolRain" type="Button" parent="HUD/BottomBar/Margin/ToolGrid"]
+custom_minimum_size = Vector2(120, 52)
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_font_sizes/font_size = 18
+text = "Rain"
+
+[node name="ToolLightning" type="Button" parent="HUD/BottomBar/Margin/ToolGrid"]
+custom_minimum_size = Vector2(120, 52)
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_font_sizes/font_size = 18
+text = "Bolt"
+
+[node name="ToolMeteor" type="Button" parent="HUD/BottomBar/Margin/ToolGrid"]
+custom_minimum_size = Vector2(120, 52)
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_font_sizes/font_size = 18
+text = "Meteor"
+
+[node name="BrushButton" type="Button" parent="HUD/BottomBar/Margin/ToolGrid"]
+custom_minimum_size = Vector2(120, 52)
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_font_sizes/font_size = 18
+text = "Brush: Fine"
