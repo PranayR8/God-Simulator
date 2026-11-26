@@ -21,9 +21,12 @@ into a real mobile app.
   citizens and stops at the halfway point to its nearest neighbour, so
   two territories meet at their border but never overlap — and every
   person belongs to a village (a coloured ring under their feet shows
-  which one). Citizens wander inside their own border;
-  nomads who walk into a territory join that village, and children are
-  born into their parent's village. Village names and citizen counts are
+  which one). A group that forms close to an existing village joins it
+  instead of founding a new one right next door, and any nomad who
+  comes within a few tiles of a village's border joins it too — the
+  history log shows these as "N people joined Wilwick". Citizens
+  wander inside their own border, and children are born into their
+  parent's village. Village names and citizen counts are
   drawn on the map.
 - **Powers**: Rain (heals scorched land, grows forest), Lightning (kills
   creatures, scorches trees), Meteor (crater, kills in a radius).
