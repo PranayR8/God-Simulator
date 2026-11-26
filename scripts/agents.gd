@@ -155,10 +155,56 @@ func people_near(tile: Vector2i, radius_tiles: int) -> int:
 func _draw() -> void:
 	for a in agents:
 		if a.kind == SimAgent.Kind.PERSON:
-			draw_circle(a.pos, 5.0, SimAgent.PERSON_COLOR)
-			draw_arc(a.pos, 5.0, 0, TAU, 12, Color("#8a6d3b"), 1.5)
+			_draw_person(a)
 		else:
-			# Sheep: white body, dark head dot.
-			draw_circle(a.pos, 5.0, SimAgent.SHEEP_COLOR)
-			draw_arc(a.pos, 5.0, 0, TAU, 12, Color("#9a9a9a"), 1.5)
-			draw_circle(a.pos + Vector2(3, -2), 2.0, Color("#3a3a3a"))
+			_draw_sheep(a)
+
+## A person, about one tile tall: legs, a coloured tunic, arms, a head
+## with a hair cap. A small bob while walking keeps them feeling alive.
+func _draw_person(a: SimAgent) -> void:
+	var bob := sin(a.age * 0.9) * 1.0
+	var p := a.pos + Vector2(0, bob)
+	var skin := SimAgent.PERSON_COLOR
+	var dark := Color("#5a4632")
+	# Legs.
+	draw_line(p + Vector2(-2.5, 4), p + Vector2(-2.5, 9), dark, 2.0)
+	draw_line(p + Vector2(2.5, 4), p + Vector2(2.5, 9), dark, 2.0)
+	# Tunic: shoulders to hem.
+	draw_colored_polygon(PackedVector2Array([
+		p + Vector2(-5, -2), p + Vector2(5, -2),
+		p + Vector2(6.5, 5), p + Vector2(-6.5, 5),
+	]), a.shirt_color)
+	# Arms.
+	draw_line(p + Vector2(-5, -1), p + Vector2(-7.5, 3), a.shirt_color, 2.0)
+	draw_line(p + Vector2(5, -1), p + Vector2(7.5, 3), a.shirt_color, 2.0)
+	# Head with a hair cap on top.
+	draw_circle(p + Vector2(0, -6), 3.6, skin)
+	draw_arc(p + Vector2(0, -6), 3.6, PI, TAU, 10, a.hair_color, 2.2)
+
+## A sheep: fluffy white body, four dark legs, a dark head at the front
+## (facing whichever way it is walking), a wool tuft and an ear.
+func _draw_sheep(a: SimAgent) -> void:
+	var facing := 1.0
+	if a.target.x < a.pos.x:
+		facing = -1.0
+	var bob := sin(a.age * 0.9 + 1.7) * 0.5
+	var p := a.pos + Vector2(0, bob)
+	var wool := SimAgent.SHEEP_COLOR
+	var dark := Color("#3a3a3a")
+	var outline := Color("#c8c8c8")
+	# Legs.
+	draw_line(p + Vector2(-6, 2), p + Vector2(-6, 7), dark, 1.5)
+	draw_line(p + Vector2(-2, 3), p + Vector2(-2, 7), dark, 1.5)
+	draw_line(p + Vector2(2, 3), p + Vector2(2, 7), dark, 1.5)
+	draw_line(p + Vector2(6, 2), p + Vector2(6, 7), dark, 1.5)
+	# Fluffy body: overlapping wool circles.
+	draw_circle(p + Vector2(-5, -1), 4.5, wool)
+	draw_circle(p + Vector2(5, -1), 4.5, wool)
+	draw_circle(p + Vector2(0, -2), 5.5, wool)
+	draw_circle(p + Vector2(0, -4), 4.0, wool)
+	draw_arc(p + Vector2(0, -2), 5.5, 0, TAU, 16, outline, 1.0)
+	# Head at the front, with a wool tuft and an ear.
+	var head := p + Vector2(facing * 9.5, -3)
+	draw_circle(head, 3.0, dark)
+	draw_circle(head + Vector2(0, -3.5), 1.6, wool)
+	draw_line(head + Vector2(-facing * 1.5, -2), head + Vector2(-facing * 4, -4.5), dark, 1.5)
