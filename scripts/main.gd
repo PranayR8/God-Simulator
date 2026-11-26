@@ -58,6 +58,7 @@ func _ready() -> void:
 	# the day and writes them into the log, and the HUD redraws.
 	agents.child_born.connect(_on_child_born)
 	agents.starved.connect(_on_starved)
+	agents.old_age_died.connect(_on_old_age_died)
 	villages.village_founded.connect(_on_village_founded)
 	villages.people_joined.connect(_on_people_joined)
 	event_log.changed.connect(_on_log_changed)
@@ -333,6 +334,9 @@ func _on_child_born(village_name: String) -> void:
 
 func _on_starved(village_name: String) -> void:
 	event_log.add_starvation_death(day, village_name)
+
+func _on_old_age_died(village_name: String) -> void:
+	event_log.add_old_age_death(day, village_name)
 
 func _on_village_founded(village_name: String) -> void:
 	event_log.add(day, "%s was founded" % village_name)

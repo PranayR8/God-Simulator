@@ -84,6 +84,34 @@ func _starvation_text(village_name: String, count: int) -> String:
 		return "A villager of %s died of starvation" % village_name
 	return "%d villagers of %s died of starvation" % [count, village_name]
 
+## A death by old age (village_name "" = nomad). Aggregated like
+## births and starvation deaths: several elders dying in one village
+## on one day become one line.
+func add_old_age_death(day: int, village_name: String) -> void:
+	if not entries.is_empty():
+		var last: Dictionary = entries[entries.size() - 1]
+		if String(last.get("kind", "")) == "old_age" \
+				and int(last.get("day", -1)) == day \
+				and String(last.get("village", "")) == village_name:
+			var count := int(last.get("count", 1)) + 1
+			last["count"] = count
+			last["text"] = _old_age_text(village_name, count)
+			changed.emit()
+			return
+	entries.append({
+		"day": day, "text": _old_age_text(village_name, 1), "kind": "old_age",
+		"village": village_name, "count": 1,
+	})
+	_trim()
+	changed.emit()
+
+func _old_age_text(village_name: String, count: int) -> String:
+	if village_name == "":
+		return "A nomad died of old age" if count == 1 else "%d nomads died of old age" % count
+	if count == 1:
+		return "An elder of %s died of old age" % village_name
+	return "%d elders of %s died of old age" % [count, village_name]
+
 func _trim() -> void:
 	while entries.size() > MAX_ENTRIES:
 		entries.pop_front()

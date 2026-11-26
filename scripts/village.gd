@@ -140,6 +140,13 @@ func _try_found(current_day: int) -> void:
 ## village right next door — the exact thing this rule exists to
 ## prevent. The population radius is the village's real sphere of
 ## influence.
+## The distance is measured to the CLOSEST member of the group, not to
+## the candidate tile: a group is a spread-out handful of people, and
+## the candidate is whichever one the scan happened to pick — if the
+## nearest member is within the village's reach, the group is touching
+## the village and joins. Measuring to one arbitrary member made the
+## join flaky (a person who wandered a tile or two further out could
+## veto the whole group's join).
 ## This also covers a group standing inside a territory — founding
 ## runs before claiming on the same tick, so without this check a
 ## group inside a village's own land could found a second village
@@ -154,15 +161,28 @@ func _try_join_nearby_village(tile: Vector2i) -> bool:
 			best = v
 	if best == null:
 		return false
-	if best_d > influence_radius_tiles(best):
-		return false
 	var center := world.tile_to_world(tile.x, tile.y)
 	var idx := villages.find(best)
-	var joined := 0
+	# The group: unassigned people within FOUND_RADIUS of the candidate.
+	var group: Array = []
 	for a in agents.agents:
 		if a.kind == SimAgent.Kind.PERSON and a.village < 0 and a.pos.distance_to(center) <= FOUND_RADIUS * GodSimWorld.TILE:
-			a.village = idx
-			joined += 1
+			group.append(a)
+	if group.is_empty():
+		return false
+	# Closest member to the village decides whether the group is near.
+	var home := world.tile_to_world(best.tile.x, best.tile.y)
+	var closest := INF
+	for a in group:
+		var d: float = a.pos.distance_to(home) / GodSimWorld.TILE
+		if d < closest:
+			closest = d
+	if closest > influence_radius_tiles(best):
+		return false
+	var joined := 0
+	for a in group:
+		a.village = idx
+		joined += 1
 	if joined > 0:
 		people_joined.emit(best.name, joined)
 		return true

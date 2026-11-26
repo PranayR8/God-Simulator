@@ -8,7 +8,13 @@ extends Node2D
 const MAX_PEOPLE := 260
 const MAX_SHEEP := 140
 const BREED_TIME := 60.0  # ticks of cooldown after breeding (15s at 1x)
-const BREED_CHANCE := 0.003  # per tick, per agent standing next to a mate
+# Per tick, per agent standing next to a mate. Tuned down from 0.003 in
+# Phase 3: now that people die (starvation, old age), births must be
+# slow enough that the population finds a balance instead of exploding
+# past the food limit and jamming at the cap. (The hunger gate below
+# does the rest: only the well-fed breed, so a village that outgrows
+# its food stops growing until its food catches up.)
+const BREED_CHANCE := 0.001
 
 ## Hunger (Phase 2, people only). Hunger rises every tick; at 100 the
 ## person is starving and health drains. A berry restores 50 hunger,
@@ -35,6 +41,10 @@ signal child_born(village_name: String)
 ## Emitted when a person dies of starvation. village_name is "" for a
 ## nomad; Main logs it (aggregated per village per day, like births).
 signal starved(village_name: String)
+
+## Emitted when a person dies of old age. village_name is "" for a
+## nomad; Main logs it (aggregated per village per day).
+signal old_age_died(village_name: String)
 
 var _rng := RandomNumberGenerator.new()
 
@@ -92,6 +102,9 @@ func tick(dt: float) -> void:
 				# Starved to death — removed from the list, so don't
 				# advance i; the next agent slid into this slot.
 				continue
+			if _update_aging(a):
+				# Died of old age — same removal, same rule.
+				continue
 			_try_eat(a)
 		_move_agent(a, dt)
 		i += 1
@@ -115,6 +128,18 @@ func _update_hunger(a: SimAgent) -> bool:
 		# Fed: slowly recover any health lost to an earlier hunger spell.
 		a.health = minf(HEALTH_MAX, a.health + HEALTH_REGEN_PER_TICK)
 	return false
+
+## Old age: when a person's age reaches their randomized lifespan,
+## they die. Returns true if they died (and removes them from the list).
+func _update_aging(a: SimAgent) -> bool:
+	if a.age < a.lifespan:
+		return false
+	var home_name := ""
+	if a.village >= 0 and villages != null and a.village < villages.villages.size():
+		home_name = villages.villages[a.village].name
+	agents.erase(a)
+	old_age_died.emit(home_name)
+	return true
 
 ## If this person is hungry and stands on (or next to) a forest tile
 ## with berries, eat one: the berry is gone, hunger drops.
@@ -234,6 +259,15 @@ func _try_breed() -> void:	# A creature breeds when it stands next to another of
 	for a in agents.duplicate():
 		if a.breed_cooldown > 0.0:
 			continue
+		if a.is_child():
+			# Children are too young to have children of their own.
+			continue
+		if a.kind == SimAgent.Kind.PERSON and a.hunger >= HUNGER_SEEK:
+			# Only the well-fed breed. A village that outgrows its food
+			# stops growing until its food catches up — this is what
+			# lets the population settle at what the land can feed
+			# instead of exploding to the cap and starving.
+			continue
 		var cap := MAX_PEOPLE if a.kind == SimAgent.Kind.PERSON else MAX_SHEEP
 		var total := people if a.kind == SimAgent.Kind.PERSON else sheep
 		if total >= cap:
@@ -298,25 +332,29 @@ func _draw() -> void:
 
 ## A person, about one tile tall: legs, a coloured tunic, arms, a head
 ## with a hair cap. A small bob while walking keeps them feeling alive.
+## Age shows: children are drawn smaller, elders keep full size but
+## with grey hair (and they walk slower — see SimAgent.speed()).
 func _draw_person(a: SimAgent) -> void:
 	var bob := sin(a.age * 0.9) * 1.0
 	var p := a.pos + Vector2(0, bob)
 	var skin := SimAgent.PERSON_COLOR
 	var dark := Color("#5a4632")
+	var sc := 0.62 if a.is_child() else 1.0
+	var hair := Color("#b0b0b0") if a.is_elder() else a.hair_color
 	# Legs.
-	draw_line(p + Vector2(-2.5, 4), p + Vector2(-2.5, 9), dark, 2.0)
-	draw_line(p + Vector2(2.5, 4), p + Vector2(2.5, 9), dark, 2.0)
+	draw_line(p + Vector2(-2.5, 4) * sc, p + Vector2(-2.5, 9) * sc, dark, 2.0 * sc)
+	draw_line(p + Vector2(2.5, 4) * sc, p + Vector2(2.5, 9) * sc, dark, 2.0 * sc)
 	# Tunic: shoulders to hem.
 	draw_colored_polygon(PackedVector2Array([
-		p + Vector2(-5, -2), p + Vector2(5, -2),
-		p + Vector2(6.5, 5), p + Vector2(-6.5, 5),
+		p + Vector2(-5, -2) * sc, p + Vector2(5, -2) * sc,
+		p + Vector2(6.5, 5) * sc, p + Vector2(-6.5, 5) * sc,
 	]), a.shirt_color)
 	# Arms.
-	draw_line(p + Vector2(-5, -1), p + Vector2(-7.5, 3), a.shirt_color, 2.0)
-	draw_line(p + Vector2(5, -1), p + Vector2(7.5, 3), a.shirt_color, 2.0)
+	draw_line(p + Vector2(-5, -1) * sc, p + Vector2(-7.5, 3) * sc, a.shirt_color, 2.0 * sc)
+	draw_line(p + Vector2(5, -1) * sc, p + Vector2(7.5, 3) * sc, a.shirt_color, 2.0 * sc)
 	# Head with a hair cap on top.
-	draw_circle(p + Vector2(0, -6), 3.6, skin)
-	draw_arc(p + Vector2(0, -6), 3.6, PI, TAU, 10, a.hair_color, 2.2)
+	draw_circle(p + Vector2(0, -6) * sc, 3.6 * sc, skin)
+	draw_arc(p + Vector2(0, -6) * sc, 3.6 * sc, PI, TAU, 10, hair, 2.2 * sc)
 
 ## A sheep: fluffy white body, four dark legs, a dark head at the front
 ## (facing whichever way it is walking), a wool tuft and an ear.

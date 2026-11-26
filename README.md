@@ -20,7 +20,15 @@ into a real mobile app.
   hungry person walks to the nearest berries and eats. Grass alone gives
   nothing — a village with no forest nearby starves, and deaths are
   logged as "died of starvation". Citizens may forage a few tiles past
-  their border to find food.
+  their border to find food. Only the well-fed have children, so a
+  village that outgrows its food stops growing until the food catches
+  up.
+- **Aging & death**: people are born, grow up, grow old, and die. Children
+  are small and can't have children of their own; adults are full size;
+  elders walk slower and have grey hair. Each person lives 60–90 days,
+  then dies of old age — the log says so, and births replace the dead,
+  so the population settles at what the land can feed instead of
+  climbing to the cap and freezing.
   (Wilwick, Kelholt, Bramley…) that grows houses and population over time.
   Every village owns a territory — a coloured border that grows with its
   citizens and stops at the halfway point to its nearest neighbour, so
