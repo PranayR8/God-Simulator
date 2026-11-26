@@ -360,6 +360,28 @@ func territory_radius_px(v: VillageData) -> float:
 func house_count(v: VillageData) -> int:
 	return clampi(population_of(v) / POP_PER_HOUSE, 1, STAGE_HOUSE_CAPS[stage_of(v)])
 
+## Where the houses stand. The built-up area spreads as the village
+## grows: a golden-angle spiral out to a built-up radius that grows
+## with the population (24 + 2.6 per citizen) and is capped at 65% of
+## the territory, so houses stay inside the border (and the wall).
+## A new Hamlet clusters near the centre; a City spreads its houses
+## across its land instead of piling them all on one spot. The
+## square-root spacing keeps the density even — houses fill the area
+## instead of clumping at the centre or ringing the edge.
+func house_positions(v: VillageData) -> Array[Vector2]:
+	var center := world.tile_to_world(v.tile.x, v.tile.y)
+	var radius := territory_radius_px(v)
+	var built_radius := minf(radius * 0.65, 24.0 + 2.6 * float(population_of(v)))
+	built_radius = maxf(built_radius, 20.0)
+	var houses := house_count(v)
+	var out: Array[Vector2] = []
+	for i in houses:
+		var angle := float(i) * 2.39996
+		var frac := sqrt(float(i) / float(maxi(houses - 1, 1)))
+		var hradius := 16.0 + (built_radius - 16.0) * frac
+		out.append(center + Vector2(cos(angle), sin(angle)) * hradius)
+	return out
+
 func _draw() -> void:
 	if world == null:
 		return
@@ -378,12 +400,7 @@ func _draw() -> void:
 			draw_arc(center, radius - 6.0, 0, TAU, 64, Color("#7d7468"), 3.0)
 		var houses := house_count(v)
 		var house_scale: float = STAGE_HOUSE_SCALES[stage]
-		for i in houses:
-			# Golden angle (~137.5°) spreads houses around the centre
-			# without them lining up in a row.
-			var angle := float(i) * 2.39996
-			var hradius := 16.0 + float(i % 3) * 11.0
-			var hp := center + Vector2(cos(angle), sin(angle)) * hradius
+		for hp in house_positions(v):
 			_draw_house(hp, house_scale)
 		# A keep at City — a stone tower with battlements and the
 		# village flag, drawn last so it stands at the centre.

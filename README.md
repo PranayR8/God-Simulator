@@ -33,9 +33,12 @@ into a real mobile app.
   a Hamlet, at 15 a Village, at 30 a Town, at 60 a City — and you can
   see it: the territory gets bigger, more and larger houses appear, a
   stone wall ring goes up at Town, and a keep with the village flag at
-  City. The label shows the stage, and the log records each promotion
-  ("Wilwick became a Town"). A village that loses people falls back
-  down a stage, too.
+  City. The houses spread out as the village grows — the built-up area
+  widens with the population instead of piling every house at the
+  centre — so a City looks like a town spread across its land, not a
+  knot in the middle of an empty circle. The label shows the stage, and
+  the log records each promotion ("Wilwick became a Town"). A village
+  that loses people falls back down a stage, too.
   (Wilwick, Kelholt, Bramley…) that grows houses and population over time.
   Every village owns a territory — a coloured border that grows with its
   citizens and stops at the halfway point to its nearest neighbour, so
