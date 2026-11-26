@@ -5,11 +5,13 @@ extends Node2D
 ##
 ## A village is founded when at least FOUND_PEOPLE people stand close
 ## together (within FOUND_RADIUS tiles). Every village owns a territory
-## — a circle around its centre whose radius grows with its population —
-## and every person belongs to exactly one village (or to none, as a
-## nomad). Citizens stay near home and wander inside their own border;
-## a nomad who walks into a territory joins that village, and children
-## are born into their parent's village.
+## — a circle around its centre whose radius grows with its population
+## and stops at the halfway point to its nearest neighbour, so two
+## territories meet at their border but never overlap. Every person
+## belongs to exactly one village (or to none, as a nomad). Citizens
+## stay near home and wander inside their own border; a nomad who walks
+## into a territory joins that village, and children are born into their
+## parent's village.
 ##
 ## VillageData is a small inner class — just the data for one village.
 ## (GDScript allows one named class per file, so the data lives inside
@@ -157,9 +159,31 @@ func population_of(v: VillageData) -> int:
 	return n
 
 ## A village's territory grows with its citizens: 4 tiles plus one per
-## 3 citizens, between 5 and 10 tiles.
+## 3 citizens, between 5 and 10 tiles — but it never overlaps a
+## neighbour's territory. The border between two villages sits at the
+## halfway point: each village's radius is capped at half the distance
+## to its nearest neighbour (rounded down, so the two radii together
+## can never exceed the distance between the villages). A lone village
+## with no neighbours just uses its population radius. The 2-tile floor
+## is safe: villages always found at least ~5.7 tiles apart, so half
+## that distance is never below 2.
 func territory_radius_tiles(v: VillageData) -> int:
-	return clampi(4 + population_of(v) / 3, MIN_TERRITORY, MAX_TERRITORY)
+	var r := clampi(4 + population_of(v) / 3, MIN_TERRITORY, MAX_TERRITORY)
+	var gap := _nearest_neighbour_gap_tiles(v)
+	if gap < INF:
+		r = mini(r, int(gap * 0.5))
+	return maxi(r, 2)
+
+## Distance in tiles to the closest other village (INF when alone).
+func _nearest_neighbour_gap_tiles(v: VillageData) -> float:
+	var best := INF
+	for other in villages:
+		if other == v:
+			continue
+		var d := Vector2(v.tile - other.tile).length()
+		if d < best:
+			best = d
+	return best
 
 func territory_radius_px(v: VillageData) -> float:
 	return float(territory_radius_tiles(v) * GodSimWorld.TILE)
