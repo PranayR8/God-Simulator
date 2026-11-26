@@ -27,6 +27,9 @@ const TOOL_SPAWN_SHEEP := "spawn_sheep"
 const TOOL_RAIN := "rain"
 const TOOL_LIGHTNING := "lightning"
 const TOOL_METEOR := "meteor"
+const TOOL_BLESS_PERSON := "bless_person"
+const TOOL_BLESS_VILLAGE := "bless_village"
+const TOOL_FERTILE_RAIN := "fertile_rain"
 
 var current_tool: String = TOOL_PAINT_GRASS
 var brush_wide: bool = false
@@ -53,6 +56,8 @@ const LOG_EXPANDED_BOTTOM := 496.0
 var log_expanded := false
 
 var _tool_buttons := {}
+var _tool_powers := {}
+var _last_cooldown_state := {}
 
 func _ready() -> void:
 	_tool_buttons = {
@@ -65,6 +70,16 @@ func _ready() -> void:
 		TOOL_RAIN: $BottomBar/Margin/ToolGrid/ToolRain,
 		TOOL_LIGHTNING: $BottomBar/Margin/ToolGrid/ToolLightning,
 		TOOL_METEOR: $BottomBar/Margin/ToolGrid/ToolMeteor,
+		TOOL_BLESS_PERSON: $BottomBar/Margin/ToolGrid/ToolBlessPerson,
+		TOOL_BLESS_VILLAGE: $BottomBar/Margin/ToolGrid/ToolBlessVillage,
+		TOOL_FERTILE_RAIN: $BottomBar/Margin/ToolGrid/ToolFertileRain,
+	}
+	# Which Power enum each blessing tool maps to, for the cooldown
+	# display (update_cooldowns greys a button out while it recharges).
+	_tool_powers = {
+		TOOL_BLESS_PERSON: Powers.Power.BLESS_PERSON,
+		TOOL_BLESS_VILLAGE: Powers.Power.BLESS_VILLAGE,
+		TOOL_FERTILE_RAIN: Powers.Power.FERTILE_RAIN,
 	}
 	for tool in _tool_buttons:
 		var button: Button = _tool_buttons[tool]
@@ -95,6 +110,19 @@ func set_speed(multiplier: int) -> void:
 
 func set_hint(text: String) -> void:
 	_hint_label.text = text
+
+## Grey out a blessing's button while it recharges (and light it back
+## up when ready). Only touches a button when its state actually
+## changed, so this can run every tick without flicker.
+func update_cooldowns(cooldowns: Dictionary) -> void:
+	for tool in _tool_powers:
+		var power: int = _tool_powers[tool]
+		var on_cooldown := int(cooldowns.get(power, 0)) > 0
+		if _last_cooldown_state.get(tool, false) == on_cooldown:
+			continue
+		_last_cooldown_state[tool] = on_cooldown
+		var button: Button = _tool_buttons[tool]
+		button.disabled = on_cooldown
 
 ## Redraw the history panel from the log's entries (dictionaries with
 ## "day" and "text"). Newest entry first; the collapsed one-liner shows

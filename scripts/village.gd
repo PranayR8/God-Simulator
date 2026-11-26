@@ -41,6 +41,11 @@ class VillageData:
 	## basic dwellings — so a village with builders but no wood still
 	## has its basic houses; it just doesn't get the extra ones.
 	var extra_houses_built: int = 0
+	## Phase 8 — blessing. blessed_until_day is the first day the
+	## blessing has worn off (0 = never blessed). While the current day
+	## is before it, the village is blessed: its people breed twice as
+	## often and its farmers bring in one extra unit of food per cycle.
+	var blessed_until_day: int = 0
 
 	func _init(p_name: String, p_tile: Vector2i, p_day: int, p_color: Color) -> void:
 		name = p_name
@@ -117,7 +122,10 @@ func count() -> int:
 	return villages.size()
 
 ## One simulation tick: look for new villages and new citizens, then redraw.
-func tick(current_day: int) -> void:
+var current_day: int = 1  # the day this tick is for; _draw uses it for the blessed border
+
+func tick(p_day: int) -> void:
+	current_day = p_day
 	# Founding and claiming scan people, so only do them every 8th tick —
 	# villages don't need to appear instantly.
 	_scan_counter += 1
@@ -332,6 +340,27 @@ func stage_name(v: VillageData) -> String:
 func label_text(v: VillageData) -> String:
 	return "%s · %s · %d · F%d · W%d" % [v.name, stage_name(v), population_of(v), int(v.food), int(v.wood)]
 
+## Is this village currently blessed (Phase 8)? The blessing lasts a
+## season — 15 days from the day it was given.
+func is_blessed(v: VillageData, day: int) -> bool:
+	return day < v.blessed_until_day
+
+## Which village's territory contains this tile (nearest centre wins),
+## or -1 if the tile belongs to no village. Bless Village (Phase 8)
+## targets through this — the god taps a village's land.
+func village_at_tile(tile: Vector2i) -> int:
+	var pos := world.tile_to_world(tile.x, tile.y)
+	var best := -1
+	var best_d := 1e9
+	for i in villages.size():
+		var v: VillageData = villages[i]
+		var center := world.tile_to_world(v.tile.x, v.tile.y)
+		var d := pos.distance_to(center)
+		if d <= territory_radius_px(v) and d < best_d:
+			best = i
+			best_d = d
+	return best
+
 ## The territory radius from population alone, before the neighbour
 ## cap — the village's natural size, used for its sphere of
 ## influence (see _try_join_nearby_village). The cap grows with the
@@ -514,9 +543,14 @@ func _draw() -> void:
 		var radius := territory_radius_px(v)
 		var stage := stage_of(v)
 		# Territory: a faint tint of the village colour, with a border
-		# circle so the edge of the land is visible.
+		# circle so the edge of the land is visible. A blessed village
+		# (Phase 8) wears a gold border instead, so you can see at a
+		# glance where the god's favour rests.
 		draw_circle(center, radius, Color(v.color, 0.06))
-		draw_arc(center, radius, 0, TAU, 64, Color(v.color, 0.65), 2.0)
+		if is_blessed(v, current_day):
+			draw_arc(center, radius, 0, TAU, 64, Color(1.0, 0.85, 0.2, 0.9), 3.0)
+		else:
+			draw_arc(center, radius, 0, TAU, 64, Color(v.color, 0.65), 2.0)
 		# A wall ring at Town and above — a stone circle just inside
 		# the territory border.
 		if stage >= 2:

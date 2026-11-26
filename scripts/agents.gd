@@ -45,6 +45,13 @@ const HARVEST_AUTUMN_FOOD := 3.0
 
 ## The season right now (set by tick; Main owns the day count).
 var season: int = GodSimWorld.SEASON_SPRING
+var current_day: int = 1  # set by tick(); the village blessing is dated by day
+
+## Blessings (Phase 8). A blessed village is fertile and productive for
+## a season: its people breed twice as often, and each farmer brings in
+## one extra unit of food per work-cycle.
+const BLESS_VILLAGE_BREED_MULT := 2.0
+const BLESS_VILLAGE_FARMER_BONUS := 1.0
 
 var agents: Array[SimAgent] = []
 var world: GodSimWorld = null
@@ -111,8 +118,9 @@ func random_walkable_tile() -> Vector2i:
 
 ## One simulation tick: hunger and health, movement, then maybe breed.
 ## dt is the tick length in seconds (used for movement).
-func tick(dt: float, p_season: int) -> void:
+func tick(dt: float, p_season: int, p_day: int) -> void:
 	season = p_season
+	current_day = p_day
 	var i := 0
 	while i < agents.size():
 		var a := agents[i]
@@ -168,10 +176,14 @@ func _do_job(a: SimAgent) -> void:
 		# grows nothing (the land is frozen), so the village lives off
 		# what it stored. Spring and Summer are the normal 1 unit.
 		if _has_forest_in_inner_half(v, radius * 0.5) and season != GodSimWorld.SEASON_WINTER:
+			var gain := 1.0
 			if season == GodSimWorld.SEASON_AUTUMN:
-				v.food += HARVEST_AUTUMN_FOOD
-			else:
-				v.food += 1.0
+				gain = HARVEST_AUTUMN_FOOD
+			# Phase 8 — a blessed village's farmers bring in one extra
+			# unit per cycle (the blessing's growth).
+			if villages.is_blessed(v, current_day):
+				gain += BLESS_VILLAGE_FARMER_BONUS
+			v.food += gain
 	elif a.job == SimAgent.JOB_WOODCUTTER:
 		a.job_timer = 120.0
 		var t := _furthest_forest_tile(v, radius * 0.5, radius + 2.0 * GodSimWorld.TILE)
@@ -245,7 +257,10 @@ func _update_hunger(a: SimAgent) -> bool:
 		# — unless the winter cold is biting (an unprotected person
 		# doesn't recover in winter; see _update_cold).
 		if not (season == GodSimWorld.SEASON_WINTER and _winter_protection(a) < 1.0):
-			a.health = minf(HEALTH_MAX, a.health + HEALTH_REGEN_PER_TICK)
+			var regen := HEALTH_REGEN_PER_TICK
+			if a.blessed:
+				regen *= SimAgent.BLESS_REGEN_MULT
+			a.health = minf(HEALTH_MAX, a.health + regen)
 	return false
 
 ## How protected this person is from the winter cold (Phase 7):
@@ -426,6 +441,12 @@ func _breed_multiplier() -> float:
 		return BREED_WINTER_MULT
 	return 1.0
 
+## Is this person in a village that is currently blessed (Phase 8)?
+func _village_blessed(a: SimAgent) -> bool:
+	if a.village < 0 or villages == null or a.village >= villages.villages.size():
+		return false
+	return villages.is_blessed(villages.villages[a.village], current_day)
+
 func _try_breed() -> void:	# A creature breeds when it stands next to another of its kind on good
 	# land, its cooldown has expired, and the population cap allows it.
 	# (We iterate a copy of the list because breeding appends to it.)
@@ -451,7 +472,10 @@ func _try_breed() -> void:	# A creature breeds when it stands next to another of
 		var t := world.get_terrain(tile.x, tile.y)
 		if t != GodSimWorld.Terrain.GRASS and t != GodSimWorld.Terrain.FOREST:
 			continue
-		if _has_neighbour(a, 30.0) and _rng.randf() < BREED_CHANCE * _breed_multiplier():
+		var breed_mult := _breed_multiplier()
+		if _village_blessed(a):
+			breed_mult *= BLESS_VILLAGE_BREED_MULT
+		if _has_neighbour(a, 30.0) and _rng.randf() < BREED_CHANCE * breed_mult:
 			var child := SimAgent.new(
 				a.kind,
 				a.pos + Vector2(_rng.randf_range(-8, 8), _rng.randf_range(-8, 8))
@@ -490,6 +514,20 @@ func kill_in_radius(center: Vector2, radius_px: float) -> int:
 	return dead
 
 ## How many people stand within radius_tiles of a tile (used by villages).
+## The nearest PERSON within radius_px of a point, or null. Bless
+## Person (Phase 8) targets through this — the god taps a person.
+func nearest_person(pos: Vector2, radius_px: float) -> SimAgent:
+	var best: SimAgent = null
+	var best_d := radius_px
+	for a in agents:
+		if a.kind != SimAgent.Kind.PERSON:
+			continue
+		var d := a.pos.distance_to(pos)
+		if d <= best_d:
+			best = a
+			best_d = d
+	return best
+
 func people_near(tile: Vector2i, radius_tiles: int) -> int:
 	var center := world.tile_to_world(tile.x, tile.y)
 	var n := 0
@@ -512,6 +550,14 @@ func _draw() -> void:
 func _draw_person(a: SimAgent) -> void:
 	var bob := sin(a.age * 0.9) * 1.0
 	var p := a.pos + Vector2(0, bob)
+	# Phase 8 — a blessed person stands out: a golden glow and a gold
+	# ring around them, drawn behind the figure. The glow is strong
+	# enough to spot at fit zoom — a blessed person should read as
+	# golden from across the map, not just up close.
+	if a.blessed:
+		var sc0 := 0.62 if a.is_child() else 1.0
+		draw_circle(p, 13.0 * sc0, Color(1.0, 0.85, 0.2, 0.45))
+		draw_arc(p, 10.0 * sc0, 0, TAU, 24, Color(1.0, 0.85, 0.2, 1.0), 2.5 * sc0)
 	var skin := SimAgent.PERSON_COLOR
 	var dark := Color("#5a4632")
 	var sc := 0.62 if a.is_child() else 1.0

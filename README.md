@@ -66,6 +66,20 @@ into a real mobile app.
   History). The map tints by season — golden in Autumn, pale and snowy
   in Winter — and the top bar shows the season, so you can tell it at
   a glance. Winter is the test your stockpiles were built for.
+- **Blessings**: three positive powers, each with a cooldown, so you
+  choose where to spend your favour. **Bless Person** (tap a person)
+  marks them for life with a golden aura — they walk half again as
+  fast, recover health three times as fast, and live half again as
+  long. **Bless Village** (tap inside a territory) blesses the whole
+  village for a season: its people breed twice as often and its
+  farmers bring in one extra unit of food per cycle, and its territory
+  border turns gold. **Fertile Rain** (tap the forest) grows food at
+  once — every forest tile in the radius gains berries, up to the max.
+  A blessed village grows visibly faster than an unblessed one: in the
+  test, two identical villages ran a season and the blessed one ended
+  at 65 citizens (a City) against 28, with a food store of 496 against
+  112. Blessings show up in the History ("Wilwick was blessed — it
+  will grow fast this season").
   (Wilwick, Kelholt, Bramley…) that grows houses and population over time.
   Every village owns a territory — a coloured border that grows with its
   citizens and stops at the halfway point to its nearest neighbour, so

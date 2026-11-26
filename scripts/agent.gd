@@ -65,6 +65,14 @@ var job_timer: float = 0.0
 
 var village: int = -1  # index into Villages.villages; -1 = no village yet (a nomad)
 
+## Blessings (Phase 8). A blessed person is marked by the god: they walk
+## faster, recover health faster, and live longer. The blessing is for
+## life — it is set when the god blesses them and never wears off.
+var blessed: bool = false
+const BLESS_SPEED_MULT := 1.5    # blessed people walk half again as fast
+const BLESS_REGEN_MULT := 3.0    # blessed people recover health 3x as fast
+const BLESS_LIFESPAN_MULT := 1.5 # blessed people live half again as long
+
 func _init(p_kind: int, p_pos: Vector2) -> void:
 	kind = p_kind
 	pos = p_pos
@@ -80,8 +88,13 @@ func is_elder() -> bool:
 	return kind == Kind.PERSON and age >= ELDER_TICKS
 
 func speed() -> float:
+	var s := 0.0
 	if kind == Kind.SHEEP:
-		return SHEEP_SPEED
-	if is_elder():
-		return PERSON_SPEED * ELDER_SPEED_FACTOR
-	return PERSON_SPEED
+		s = SHEEP_SPEED
+	elif is_elder():
+		s = PERSON_SPEED * ELDER_SPEED_FACTOR
+	else:
+		s = PERSON_SPEED
+	if blessed:
+		s *= BLESS_SPEED_MULT
+	return s

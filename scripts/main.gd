@@ -15,7 +15,7 @@ const TICKS_PER_DAY := 120    # a day lasts 120 ticks (30s at 1x)
 const SPEEDS := [1, 2, 4]
 const MIN_ZOOM := 0.2
 const MAX_ZOOM := 2.5
-const HUD_RESERVE_PX := 200.0  # top bar + bottom toolbar, kept out of "fit"
+const HUD_RESERVE_PX := 260.0  # top bar (64) + bottom toolbar (196, three rows), kept out of "fit"
 
 var paused := false
 var speed_index := 0
@@ -58,6 +58,7 @@ func _ready() -> void:
 	villages.agents = agents
 	powers.world = world
 	powers.agents = agents
+	powers.villages = villages
 	# History: villages and births report through signals; Main stamps
 	# the day and writes them into the log, and the HUD redraws.
 	agents.child_born.connect(_on_child_born)
@@ -135,7 +136,8 @@ func _do_tick() -> void:
 		event_log.add(day, _season_arrival_text(season))
 	_last_season = season
 	world.tick(season)  # berries regrow (by season)
-	agents.tick(TICK_INTERVAL, season)
+	powers.tick_cooldowns()  # blessing cooldowns count down
+	agents.tick(TICK_INTERVAL, season, day)
 	villages.tick(day)
 	if total_ticks % 40 == 0:
 		_save_quietly()  # autosave every 40 ticks (~10s at 1x)
@@ -143,6 +145,7 @@ func _do_tick() -> void:
 
 func _update_hud() -> void:
 	hud.update_stats(day, GodSimWorld.season_name_for_day(day), agents.count_people(), villages.count(), agents.count_animals())
+	hud.update_cooldowns(powers.cooldowns)
 
 ## What the log says when a season arrives.
 func _season_arrival_text(season: int) -> String:
@@ -337,6 +340,47 @@ func _apply_tool_at_screen(screen_pos: Vector2, is_start: bool) -> void:
 			if is_start:
 				_log_power(current_tool, killed)
 			_update_hud()
+		Hud.TOOL_BLESS_PERSON, Hud.TOOL_BLESS_VILLAGE, Hud.TOOL_FERTILE_RAIN:
+			# Blessings are one deliberate tap each, never a drag — and
+			# a tap with no target (or on cooldown) spends nothing.
+			if is_start:
+				_apply_blessing(tile)
+				_update_hud()
+
+## A blessing tap: bless the person / village / land at this tile.
+## -1 = the blessing is recharging, 0 = nothing there to bless,
+## 1 = blessed (and logged). Neither failure spends the cooldown.
+func _apply_blessing(tile: Vector2i) -> void:
+	var result := 0
+	match current_tool:
+		Hud.TOOL_BLESS_PERSON:
+			result = powers.bless_person_at(tile)
+			if result == 1:
+				event_log.add(day, "A golden light blessed a villager")
+			elif result == -1:
+				hud.set_hint("Bless Person is recharging — %d day(s) left." % _cooldown_days(Powers.Power.BLESS_PERSON))
+			else:
+				hud.set_hint("No one there to bless — tap a person.")
+		Hud.TOOL_BLESS_VILLAGE:
+			result = powers.bless_village_at(tile, day)
+			if result == 1:
+				var idx := villages.village_at_tile(tile)
+				var vname := "A village" if idx < 0 else villages.villages[idx].name
+				event_log.add(day, "%s was blessed — it will grow fast this season" % vname)
+			elif result == -1:
+				hud.set_hint("Bless Village is recharging — %d day(s) left." % _cooldown_days(Powers.Power.BLESS_VILLAGE))
+			else:
+				hud.set_hint("No village here to bless — tap inside a territory.")
+		Hud.TOOL_FERTILE_RAIN:
+			result = powers._apply_fertile_rain(tile)
+			if result == 1:
+				event_log.add(day, "Fertile rain fell — the forest is heavy with food")
+			elif result == -1:
+				hud.set_hint("Fertile Rain is recharging — %d day(s) left." % _cooldown_days(Powers.Power.FERTILE_RAIN))
+
+## Whole days left on a blessing's cooldown (at least 1 while it runs).
+func _cooldown_days(power: int) -> int:
+	return maxi(1, int(ceil(float(powers.cooldown_remaining(power)) / float(TICKS_PER_DAY))))
 
 ## One log line for a power the player just used.
 func _log_power(tool: String, killed: int) -> void:

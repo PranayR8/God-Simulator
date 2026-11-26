@@ -57,7 +57,7 @@ func _agents_to_data(agents: Agents) -> Array:
 		# are likewise stored for everyone (sheep keep 0, which they
 		# ignore) so a loaded world keeps its generations instead of
 		# resetting everyone to a newborn.
-		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job})
+		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job, "blessed": a.blessed})
 	return out
 
 ## Berries as a flat list of [x, y, count] triples (only tiles that
@@ -72,7 +72,7 @@ func _berries_to_data(world: GodSimWorld) -> Array:
 func _villages_to_data(villages: Villages) -> Array:
 	var out: Array = []
 	for v in villages.villages:
-		out.append({"name": v.name, "x": v.tile.x, "y": v.tile.y, "day": v.founded_day, "color": v.color.to_html(), "food": v.food, "wood": v.wood, "extra_houses": v.extra_houses_built})
+		out.append({"name": v.name, "x": v.tile.x, "y": v.tile.y, "day": v.founded_day, "color": v.color.to_html(), "food": v.food, "wood": v.wood, "extra_houses": v.extra_houses_built, "blessed_until": v.blessed_until_day})
 	return out
 
 ## Rebuild the world from loaded data. Returns false if the data is empty
@@ -115,6 +115,7 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		# Old saves have no job — JOB_NONE, and the village hires them
 		# at the next scan.
 		na.job = int(d.get("job", -1))
+		na.blessed = bool(d.get("blessed", false))
 		agents.agents.append(na)
 	villages.clear_all()
 	for item in data.get("villages", []):
@@ -137,6 +138,7 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		nv.food = float(d.get("food", 0.0))
 		nv.wood = float(d.get("wood", 0.0))
 		nv.extra_houses_built = int(d.get("extra_houses", 0))
+		nv.blessed_until_day = int(d.get("blessed_until", 0))
 		villages.villages.append(nv)
 	event_log.from_data(data.get("log", []))
 	world.queue_redraw()
