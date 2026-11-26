@@ -29,6 +29,13 @@ into a real mobile app.
   then dies of old age — the log says so, and births replace the dead,
   so the population settles at what the land can feed instead of
   climbing to the cap and freezing.
+- **Village growth stages**: villages grow up. At 6 citizens a place is
+  a Hamlet, at 15 a Village, at 30 a Town, at 60 a City — and you can
+  see it: the territory gets bigger, more and larger houses appear, a
+  stone wall ring goes up at Town, and a keep with the village flag at
+  City. The label shows the stage, and the log records each promotion
+  ("Wilwick became a Town"). A village that loses people falls back
+  down a stage, too.
   (Wilwick, Kelholt, Bramley…) that grows houses and population over time.
   Every village owns a territory — a coloured border that grows with its
   citizens and stops at the halfway point to its nearest neighbour, so

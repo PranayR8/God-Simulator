@@ -112,6 +112,15 @@ func _old_age_text(village_name: String, count: int) -> String:
 		return "An elder of %s died of old age" % village_name
 	return "%d elders of %s died of old age" % [count, village_name]
 
+## A village reaching a new growth stage (or falling back down one):
+## "Wilwick became a Town" / "Wilwick fell back to a Village". One
+## line per change — stages move slowly, so this never floods the log.
+func add_stage_change(day: int, village_name: String, stage_name: String, grew: bool) -> void:
+	if grew:
+		add(day, "%s became a %s" % [village_name, stage_name])
+	else:
+		add(day, "%s fell back to a %s" % [village_name, stage_name])
+
 func _trim() -> void:
 	while entries.size() > MAX_ENTRIES:
 		entries.pop_front()
