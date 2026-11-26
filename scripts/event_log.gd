@@ -112,6 +112,34 @@ func _old_age_text(village_name: String, count: int) -> String:
 		return "An elder of %s died of old age" % village_name
 	return "%d elders of %s died of old age" % [count, village_name]
 
+## A death by winter cold (village_name "" = nomad). Aggregated like
+## the other deaths: several freezing in one village on one day become
+## one line, or a hard winter would flood the log.
+func add_cold_death(day: int, village_name: String) -> void:
+	if not entries.is_empty():
+		var last: Dictionary = entries[entries.size() - 1]
+		if String(last.get("kind", "")) == "cold" \
+				and int(last.get("day", -1)) == day \
+				and String(last.get("village", "")) == village_name:
+			var count := int(last.get("count", 1)) + 1
+			last["count"] = count
+			last["text"] = _cold_text(village_name, count)
+			changed.emit()
+			return
+	entries.append({
+		"day": day, "text": _cold_text(village_name, 1), "kind": "cold",
+		"village": village_name, "count": 1,
+	})
+	_trim()
+	changed.emit()
+
+func _cold_text(village_name: String, count: int) -> String:
+	if village_name == "":
+		return "A nomad froze to death" if count == 1 else "%d nomads froze to death" % count
+	if count == 1:
+		return "A villager of %s froze to death" % village_name
+	return "%d villagers of %s froze to death" % [count, village_name]
+
 ## A village reaching a new growth stage (or falling back down one):
 ## "Wilwick became a Town" / "Wilwick fell back to a Village". One
 ## line per change — stages move slowly, so this never floods the log.

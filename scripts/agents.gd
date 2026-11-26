@@ -30,6 +30,22 @@ const HEALTH_REGEN_PER_TICK := 2.0  # health recovered per tick while fed
 const FORAGE_RANGE := 20  # tiles; how far a hungry person will walk for food
 const FORAGE_MARGIN := 4  # tiles past their territory a citizen may forage
 
+## Seasons (Phase 7). Winter cold: an unprotected person freezes in
+## ~5 days (health 100 over 600 ticks); a walled village (Town/City)
+## halves the drain, so it lasts ~10 days — the wall buys time, but
+## only a full food store carries a village through the whole winter.
+## Spring doubles births, Winter halves them. Autumn is the harvest:
+## a farmer brings in 3 food per work-cycle (24 a day) instead of 1,
+## so the store fills before winter; in Winter the land is frozen and
+## farmers produce nothing.
+const COLD_DRAIN_PER_TICK := 100.0 / 600.0
+const BREED_SPRING_MULT := 2.0
+const BREED_WINTER_MULT := 0.5
+const HARVEST_AUTUMN_FOOD := 3.0
+
+## The season right now (set by tick; Main owns the day count).
+var season: int = GodSimWorld.SEASON_SPRING
+
 var agents: Array[SimAgent] = []
 var world: GodSimWorld = null
 var villages: Villages = null  # set by Main; used to keep citizens near home
@@ -37,6 +53,10 @@ var villages: Villages = null  # set by Main; used to keep citizens near home
 ## Emitted when a child is born. village_name is "" for a nomad birth;
 ## Main stamps the day and lets the EventLog aggregate births.
 signal child_born(village_name: String)
+
+## Emitted when someone freezes to death in winter (Phase 7).
+## village_name is "" for a nomad; Main logs it.
+signal cold_died(village_name: String)
 
 ## Emitted when a person dies of starvation. village_name is "" for a
 ## nomad; Main logs it (aggregated per village per day, like births).
@@ -91,7 +111,8 @@ func random_walkable_tile() -> Vector2i:
 
 ## One simulation tick: hunger and health, movement, then maybe breed.
 ## dt is the tick length in seconds (used for movement).
-func tick(dt: float) -> void:
+func tick(dt: float, p_season: int) -> void:
+	season = p_season
 	var i := 0
 	while i < agents.size():
 		var a := agents[i]
@@ -105,6 +126,9 @@ func tick(dt: float) -> void:
 			if _update_aging(a):
 				# Died of old age — same removal, same rule.
 				continue
+			if _update_cold(a):
+				# Froze to death — same removal, same rule.
+				continue
 			_try_eat(a)
 		_move_agent(a, dt)
 		if a.kind == SimAgent.Kind.PERSON and a.job >= 0 and not a.is_child():
@@ -113,11 +137,12 @@ func tick(dt: float) -> void:
 	_try_breed()
 	queue_redraw()
 
-## A citizen's work. Farmers tend the forest in the inner half of their
-## territory (one berry per 30 ticks — 4 a day, twice a tile's natural
-## regrowth, which is what makes a farmer worth more than the land
-## alone); woodcutters clear the forest at the outer edge (one tile per
-## day), so the forest edge near the village recedes while the tended
+## A citizen's work. Farmers harvest food into the village store (one
+## unit per 15 ticks — 8 a day — where there's forest to farm in the
+## inner half; Phase 7: Autumn is the harvest, 3 units a cycle, and
+## Winter grows nothing, so the village lives off what it stored).
+## Woodcutters clear the forest at the outer edge (one tile per day, +2
+## wood), so the forest edge near the village recedes while the tended
 ## core stays fed. Builders need no per-tick work — each one raises the
 ## house count (see Villages.house_count). A worker with nothing to do
 ## (no forest in their half) just waits — they keep the job.
@@ -138,8 +163,15 @@ func _do_job(a: SimAgent) -> void:
 		# empty. (Phase 5's tend — adding a berry to the map — is
 		# replaced by this: the farmer's output is the stockpile, and
 		# the stockpile number in the village label is the visible food.)
-		if _has_forest_in_inner_half(v, radius * 0.5):
-			v.food += 1.0
+		# Phase 7 — the harvest: Autumn brings in 3 units a cycle (the
+		# bumper crop to carry the village through winter); Winter
+		# grows nothing (the land is frozen), so the village lives off
+		# what it stored. Spring and Summer are the normal 1 unit.
+		if _has_forest_in_inner_half(v, radius * 0.5) and season != GodSimWorld.SEASON_WINTER:
+			if season == GodSimWorld.SEASON_AUTUMN:
+				v.food += HARVEST_AUTUMN_FOOD
+			else:
+				v.food += 1.0
 	elif a.job == SimAgent.JOB_WOODCUTTER:
 		a.job_timer = 120.0
 		var t := _furthest_forest_tile(v, radius * 0.5, radius + 2.0 * GodSimWorld.TILE)
@@ -209,8 +241,50 @@ func _update_hunger(a: SimAgent) -> bool:
 			starved.emit(home_name)
 			return true
 	else:
-		# Fed: slowly recover any health lost to an earlier hunger spell.
-		a.health = minf(HEALTH_MAX, a.health + HEALTH_REGEN_PER_TICK)
+		# Fed: slowly recover any health lost to an earlier hunger spell
+		# — unless the winter cold is biting (an unprotected person
+		# doesn't recover in winter; see _update_cold).
+		if not (season == GodSimWorld.SEASON_WINTER and _winter_protection(a) < 1.0):
+			a.health = minf(HEALTH_MAX, a.health + HEALTH_REGEN_PER_TICK)
+	return false
+
+## How protected this person is from the winter cold (Phase 7):
+## 1.0 = fully protected — their village's food store is stocked, so
+## they're fed through the winter; 0.5 = half — a Town or City's wall
+## and keep shelter them, but they're still cold and hungry; 0.0 =
+## unprotected — a Hamlet/Village with an empty store, or a nomad with
+## no village at all. Sheep don't feel the cold (they have wool).
+func _winter_protection(a: SimAgent) -> float:
+	if a.kind != SimAgent.Kind.PERSON:
+		return 1.0
+	if a.village >= 0 and villages != null and a.village < villages.villages.size():
+		var v: Villages.VillageData = villages.villages[a.village]
+		if v.food >= 1.0:
+			return 1.0
+		if villages.stage_of(v) >= 2:
+			return 0.5
+	return 0.0
+
+## Winter cold (Phase 7). In Winter, a person without shelter or food
+## loses health to the cold. A stocked store fully protects them; a
+## Town/City wall halves the drain; everyone else freezes. Returns true
+## if the person froze to death (and removes them from the list).
+func _update_cold(a: SimAgent) -> bool:
+	if season != GodSimWorld.SEASON_WINTER:
+		return false
+	if a.kind != SimAgent.Kind.PERSON:
+		return false
+	var protection := _winter_protection(a)
+	if protection >= 1.0:
+		return false
+	a.health -= COLD_DRAIN_PER_TICK * (1.0 - protection)
+	if a.health <= 0.0:
+		var home_name := ""
+		if a.village >= 0 and villages != null and a.village < villages.villages.size():
+			home_name = villages.villages[a.village].name
+		agents.erase(a)
+		cold_died.emit(home_name)
+		return true
 	return false
 
 ## Old age: when a person's age reaches their randomized lifespan,
@@ -343,6 +417,15 @@ func _is_food_tile(t: Vector2i, home_center: Vector2, home_limit: float) -> bool
 			return false
 	return true
 
+## Births by season (Phase 7): Spring doubles them, Winter halves
+## them; Summer and Autumn are normal.
+func _breed_multiplier() -> float:
+	if season == GodSimWorld.SEASON_SPRING:
+		return BREED_SPRING_MULT
+	if season == GodSimWorld.SEASON_WINTER:
+		return BREED_WINTER_MULT
+	return 1.0
+
 func _try_breed() -> void:	# A creature breeds when it stands next to another of its kind on good
 	# land, its cooldown has expired, and the population cap allows it.
 	# (We iterate a copy of the list because breeding appends to it.)
@@ -368,7 +451,7 @@ func _try_breed() -> void:	# A creature breeds when it stands next to another of
 		var t := world.get_terrain(tile.x, tile.y)
 		if t != GodSimWorld.Terrain.GRASS and t != GodSimWorld.Terrain.FOREST:
 			continue
-		if _has_neighbour(a, 30.0) and _rng.randf() < BREED_CHANCE:
+		if _has_neighbour(a, 30.0) and _rng.randf() < BREED_CHANCE * _breed_multiplier():
 			var child := SimAgent.new(
 				a.kind,
 				a.pos + Vector2(_rng.randf_range(-8, 8), _rng.randf_range(-8, 8))

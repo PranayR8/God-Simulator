@@ -32,6 +32,7 @@ var current_tool: String = TOOL_PAINT_GRASS
 var brush_wide: bool = false
 
 @onready var _day_label: Label = $TopBar/Margin/HBox/DayLabel
+@onready var _season_label: Label = $TopBar/Margin/HBox/SeasonLabel
 @onready var _people_label: Label = $TopBar/Margin/HBox/PeopleLabel
 @onready var _villages_label: Label = $TopBar/Margin/HBox/VillagesLabel
 @onready var _animals_label: Label = $TopBar/Margin/HBox/AnimalsLabel
@@ -79,8 +80,9 @@ func _ready() -> void:
 	_log_toggle.pressed.connect(_on_log_toggle_pressed)
 	_select_tool(TOOL_PAINT_GRASS)
 
-func update_stats(day: int, people: int, villages: int, animals: int) -> void:
+func update_stats(day: int, season_name: String, people: int, villages: int, animals: int) -> void:
 	_day_label.text = "Day %d" % day
+	_season_label.text = season_name
 	_people_label.text = "People %d" % people
 	_villages_label.text = "Villages %d" % villages
 	_animals_label.text = "Animals %d" % animals

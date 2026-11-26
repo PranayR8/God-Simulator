@@ -56,6 +56,16 @@ into a real mobile app.
   starves. Woodcutters fill the wood store (2 per felled tile), and
   each extra house a builder raises costs 2 wood — a village with
   builders but no timber stays at its basic houses.
+- **Seasons**: the year has a rhythm — four seasons of 15 days each.
+  Spring doubles births and grows food fast, Summer is the peak of
+  growth, Autumn is the harvest (farmers bring in 3 food a cycle, so
+  the stores fill), and Winter grows nothing: no new berries, farmers
+  idle, and the cold drains the health of anyone without shelter or
+  food. A stocked store fully protects a village; a Town or City wall
+  halves the drain; everyone else freezes ("froze to death" in the
+  History). The map tints by season — golden in Autumn, pale and snowy
+  in Winter — and the top bar shows the season, so you can tell it at
+  a glance. Winter is the test your stockpiles were built for.
   (Wilwick, Kelholt, Bramley…) that grows houses and population over time.
   Every village owns a territory — a coloured border that grows with its
   citizens and stops at the halfway point to its nearest neighbour, so

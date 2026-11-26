@@ -49,22 +49,27 @@ theme_override_constants/margin_bottom = 6
 theme_override_constants/separation = 10
 
 [node name="DayLabel" type="Label" parent="HUD/TopBar/Margin/HBox"]
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 18
 text = "Day 1"
 vertical_alignment = 1
 
+[node name="SeasonLabel" type="Label" parent="HUD/TopBar/Margin/HBox"]
+theme_override_font_sizes/font_size = 18
+text = "Spring"
+vertical_alignment = 1
+
 [node name="PeopleLabel" type="Label" parent="HUD/TopBar/Margin/HBox"]
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 18
 text = "People 0"
 vertical_alignment = 1
 
 [node name="VillagesLabel" type="Label" parent="HUD/TopBar/Margin/HBox"]
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 18
 text = "Villages 0"
 vertical_alignment = 1
 
 [node name="AnimalsLabel" type="Label" parent="HUD/TopBar/Margin/HBox"]
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 18
 text = "Animals 0"
 vertical_alignment = 1
 

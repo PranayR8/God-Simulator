@@ -25,6 +25,10 @@ var brush_wide := false
 var day := 1
 var total_ticks := 0
 
+## The season on the last tick (-1 = not yet started, so day 1's Spring
+## isn't logged as an arrival — the world already announced itself).
+var _last_season := -1
+
 ## The world's history — one EventLog for the whole game, created here
 ## so it exists before _ready wires everything up.
 var event_log := EventLog.new()
@@ -59,6 +63,7 @@ func _ready() -> void:
 	agents.child_born.connect(_on_child_born)
 	agents.starved.connect(_on_starved)
 	agents.old_age_died.connect(_on_old_age_died)
+	agents.cold_died.connect(_on_cold_died)
 	villages.village_founded.connect(_on_village_founded)
 	villages.people_joined.connect(_on_people_joined)
 	villages.stage_changed.connect(_on_stage_changed)
@@ -121,15 +126,33 @@ func _process(delta: float) -> void:
 func _do_tick() -> void:
 	total_ticks += 1
 	day = 1 + total_ticks / TICKS_PER_DAY
-	world.tick()  # berries regrow
-	agents.tick(TICK_INTERVAL)
+	var season := GodSimWorld.season_index_for_day(day)
+	# The year turns: log the new season when it arrives (not on day 1
+	# — the world already announced itself). Winter's line is the
+	# warning that matters: the cold is coming, and only a stocked
+	# store (or a wall) will carry a village through it.
+	if _last_season >= 0 and season != _last_season:
+		event_log.add(day, _season_arrival_text(season))
+	_last_season = season
+	world.tick(season)  # berries regrow (by season)
+	agents.tick(TICK_INTERVAL, season)
 	villages.tick(day)
 	if total_ticks % 40 == 0:
 		_save_quietly()  # autosave every 40 ticks (~10s at 1x)
 	_update_hud()
 
 func _update_hud() -> void:
-	hud.update_stats(day, agents.count_people(), villages.count(), agents.count_animals())
+	hud.update_stats(day, GodSimWorld.season_name_for_day(day), agents.count_people(), villages.count(), agents.count_animals())
+
+## What the log says when a season arrives.
+func _season_arrival_text(season: int) -> String:
+	if season == GodSimWorld.SEASON_SPRING:
+		return "Spring has come — the land wakes"
+	if season == GodSimWorld.SEASON_SUMMER:
+		return "Summer has come — the land is at its greenest"
+	if season == GodSimWorld.SEASON_AUTUMN:
+		return "Autumn has come — the harvest begins"
+	return "Winter has come — the cold will test your stores"
 
 
 # --- camera ----------------------------------------------------------------
@@ -339,6 +362,9 @@ func _on_starved(village_name: String) -> void:
 
 func _on_old_age_died(village_name: String) -> void:
 	event_log.add_old_age_death(day, village_name)
+
+func _on_cold_died(village_name: String) -> void:
+	event_log.add_cold_death(day, village_name)
 
 func _on_village_founded(village_name: String) -> void:
 	event_log.add(day, "%s was founded" % village_name)

@@ -32,7 +32,29 @@ var terrain: Array[int] = []
 var berries: Dictionary = {}
 
 const BERRY_MAX := 5            # berries on a forest tile when fully grown
-const BERRY_REGROW_TICKS := 60  # ticks for one berry to regrow per forest tile
+const BERRY_REGROW_TICKS := 60  # ticks for one berry to regrow per forest tile (Autumn's normal rate)
+
+## Seasons (Phase 7): a year is 4 seasons of 15 days (60 days).
+## Spring = births and food growth up; Summer = food growth peak;
+## Autumn = harvest, stockpiles fill; Winter = no food growth, and the
+## cold drains the health of anyone without shelter or food. Day 1 is
+## the first day of Spring. A static so Main, Agents and the World can
+## all ask for the season on a given day.
+const SEASON_DAYS := 15
+const SEASON_NAMES := ["Spring", "Summer", "Autumn", "Winter"]
+const SEASON_SPRING := 0
+const SEASON_SUMMER := 1
+const SEASON_AUTUMN := 2
+const SEASON_WINTER := 3
+
+static func season_index_for_day(day: int) -> int:
+	return ((day - 1) / SEASON_DAYS) % 4
+
+static func season_name_for_day(day: int) -> String:
+	return SEASON_NAMES[season_index_for_day(day)]
+
+## The season right now (set by tick; day 1 is Spring).
+var season: int = SEASON_SPRING
 
 var _rng := RandomNumberGenerator.new()
 var _regrow_counter := 0
@@ -117,11 +139,20 @@ func add_berry(tile: Vector2i) -> bool:
 	queue_redraw()
 	return true
 
-## One simulation tick: berries regrow. Every BERRY_REGROW_TICKS, each
-## forest tile below the maximum gains one berry.
-func tick() -> void:
+## One simulation tick: berries regrow. Every _regrow_interval ticks,
+## each forest tile below the maximum gains one berry. The interval
+## follows the season (Phase 7): Spring grows fast (45), Summer is the
+## peak (30), Autumn is normal (60), and Winter grows nothing at all.
+## The season is passed in by Main (it owns the day count).
+func tick(p_season: int) -> void:
+	if p_season != season:
+		season = p_season
+		queue_redraw()  # the map tint changes with the season
+	var interval := _regrow_interval(season)
+	if interval <= 0:
+		return  # Winter: nothing grows.
 	_regrow_counter += 1
-	if _regrow_counter < BERRY_REGROW_TICKS:
+	if _regrow_counter < interval:
 		return
 	_regrow_counter = 0
 	for y in HEIGHT:
@@ -132,6 +163,16 @@ func tick() -> void:
 				if n < BERRY_MAX:
 					berries[t] = n + 1
 	queue_redraw()
+
+## Ticks between berry regrowths, by season. Winter returns 0 (never).
+func _regrow_interval(p_season: int) -> int:
+	if p_season == SEASON_SPRING:
+		return 45
+	if p_season == SEASON_SUMMER:
+		return 30
+	if p_season == SEASON_AUTUMN:
+		return BERRY_REGROW_TICKS
+	return 0
 
 ## Give every forest tile a full load of berries (used when loading an
 ## old save that stored no berry data).
@@ -192,6 +233,26 @@ func _draw() -> void:
 					rect.position + Vector2(TILE - 4, TILE * 0.5),
 					Color(1, 1, 1, 0.25), 1.5
 				)
+	# Phase 7 — the map tints by season so you can tell it at a glance:
+	# Spring is fresh and bright, Summer warm, Autumn golden, Winter
+	# pale blue-white (snow). Drawn last in the World's own layer, so it
+	# tints the land but the villages and people drawn on top of it stay
+	# bright and readable.
+	var tint := _season_tint(season)
+	if tint.a > 0.0:
+		draw_rect(Rect2(0, 0, WIDTH * TILE, HEIGHT * TILE), tint)
+
+## The season's tint over the whole map. Spring is barely there (the
+## base grass green already reads as spring); Winter is the strongest,
+## so the world visibly whitens.
+func _season_tint(p_season: int) -> Color:
+	if p_season == SEASON_SPRING:
+		return Color(0.2, 0.8, 0.2, 0.05)
+	if p_season == SEASON_SUMMER:
+		return Color(1.0, 0.85, 0.3, 0.06)
+	if p_season == SEASON_AUTUMN:
+		return Color(0.9, 0.5, 0.1, 0.10)
+	return Color(0.85, 0.9, 1.0, 0.22)
 
 func _draw_tree(x: int, y: int) -> void:
 	var h := tile_hash(x, y)
