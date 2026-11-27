@@ -68,6 +68,7 @@ const PLAGUE_SPREAD_CHANCE := 0.002
 var agents: Array[SimAgent] = []
 var world: GodSimWorld = null
 var villages: Villages = null  # set by Main; used to keep citizens near home
+var kingdoms: Kingdoms = null  # set by Main; a village in a kingdom is boosted by its king
 ## Phase 16 — the current era (set by Main each tick from Goals).
 ## New adults are equipped in the era's material.
 var era: int = 0
@@ -203,6 +204,10 @@ func leader_trait(village_idx: int) -> int:
 func _leader_trait_for(a: SimAgent) -> int:
 	if a.kind != SimAgent.Kind.PERSON or a.village < 0:
 		return -1
+	# Phase 17 — a village in a kingdom is boosted by its king, not
+	# by its own leader; the king's trait runs the whole kingdom.
+	if kingdoms != null:
+		return kingdoms.trait_for_village(a.village)
 	return leader_trait(a.village)
 
 ## Does this village already have a hero who survived a plague? A

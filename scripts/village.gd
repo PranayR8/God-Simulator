@@ -55,6 +55,16 @@ class VillageData:
 	## is before it, the village is blessed: its people breed twice as
 	## often and its farmers bring in one extra unit of food per cycle.
 	var blessed_until_day: int = 0
+	## Phase 17 — kingdoms. The kingdom this village belongs to
+	## (-1 = independent). A Town founds a kingdom or joins a nearby
+	## one; the kingdom's king (the capital's oldest hero) boosts every
+	## village in it.
+	var kingdom: int = -1
+	## The first day this village may join a kingdom again (0 = no
+	## cooldown). A village that rebels is barred from rejoining for
+	## 30 days, so a secession is not undone the next morning — it
+	## founds its own kingdom instead.
+	var join_cooldown_until_day: int = 0
 	## Phase 10 — war. last_war_day is the day the village's last war
 	## ended (0 = never at war). A village cannot raid again until
 	## WAR_COOLDOWN_DAYS have passed since then, so a war is an event,
@@ -120,6 +130,7 @@ const VILLAGE_COLORS := [
 var villages: Array[VillageData] = []
 var world: GodSimWorld = null
 var agents: Agents = null
+var kingdoms: Kingdoms = null  # set by Main; a kingdom colours its villages' borders
 ## Phase 15 — the current era (set by Main each tick from Goals).
 ## The houses redraw in the era's style, so a village's look shifts
 ## as the age advances.
@@ -397,6 +408,12 @@ func label_text(v: VillageData) -> String:
 		text += " · M%d" % int(v.marble)
 	if v.steel >= 1.0:
 		text += " · St%d" % int(v.steel)
+	# Phase 17 — a member that is not the capital shows its kingdom
+	# (the capital's name); the capital's crown says it already.
+	if kingdoms != null and v.kingdom >= 0 and v.kingdom < kingdoms.kingdoms.size():
+		var k: Kingdoms.KingdomData = kingdoms.kingdoms[v.kingdom]
+		if k.capital != villages.find(v):
+			text += " · %s" % kingdoms.kingdoms[v.kingdom].name.trim_prefix("Kingdom of ")
 	return text
 
 ## Is this village currently blessed (Phase 8)? The blessing lasts a
@@ -603,6 +620,17 @@ func _build_houses() -> void:
 ## Where the houses stand. The built-up area spreads as the village
 ## grows: a golden-angle spiral out to a built-up radius that grows
 ## with the population (24 + 2.6 per citizen) and is capped at 65% of
+## A small gold crown, drawn above a kingdom's capital.
+func _draw_crown(pos: Vector2) -> void:
+	var gold := Color(1.0, 0.85, 0.2)
+	var crown := PackedVector2Array([
+		pos + Vector2(-7, 4), pos + Vector2(-7, -3), pos + Vector2(-3.5, 1),
+		pos + Vector2(0, -5), pos + Vector2(3.5, 1), pos + Vector2(7, -3),
+		pos + Vector2(7, 4),
+	])
+	draw_colored_polygon(crown, gold)
+	draw_line(pos + Vector2(-7, 4), pos + Vector2(7, 4), Color(0.6, 0.45, 0.0), 1.5)
+
 ## the territory, so houses stay inside the border (and the wall).
 ## A new Hamlet clusters near the centre; a City spreads its houses
 ## across its land instead of piling them all on one spot. The
@@ -634,11 +662,14 @@ func _draw() -> void:
 		# circle so the edge of the land is visible. A blessed village
 		# (Phase 8) wears a gold border instead, so you can see at a
 		# glance where the god's favour rests.
+		var border_color := v.color
+		if kingdoms != null and v.kingdom >= 0 and v.kingdom < kingdoms.kingdoms.size():
+			border_color = kingdoms.kingdoms[v.kingdom].color
 		draw_circle(center, radius, Color(v.color, 0.06))
 		if is_blessed(v, current_day):
 			draw_arc(center, radius, 0, TAU, 64, Color(1.0, 0.85, 0.2, 0.9), 3.0)
 		else:
-			draw_arc(center, radius, 0, TAU, 64, Color(v.color, 0.65), 2.0)
+			draw_arc(center, radius, 0, TAU, 64, Color(border_color, 0.65), 2.0)
 		# A wall ring at Town and above — a stone circle just inside
 		# the territory border.
 		if stage >= 2:
@@ -651,6 +682,11 @@ func _draw() -> void:
 		# village flag, drawn last so it stands at the centre.
 		if stage >= 3:
 			_draw_keep(center, v.color)
+		# Phase 17 — the capital of a kingdom wears a gold crown
+		# above its centre, so the seat of power is visible at a glance.
+		if kingdoms != null and v.kingdom >= 0 and v.kingdom < kingdoms.kingdoms.size():
+			if kingdoms.kingdoms[v.kingdom].capital == villages.find(v):
+				_draw_crown(center + Vector2(0, -14))
 		if font != null:
 			# Centre the name above the village, with the stage and the
 			# citizen count and a dark shadow so it stays readable on

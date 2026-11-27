@@ -49,6 +49,7 @@ var _last_paint_tile := Vector2i(-1, -1)
 @onready var disasters: Disasters = $Disasters
 @onready var wars: Wars = $Wars
 @onready var goals: Goals = $Goals
+@onready var kingdoms: Kingdoms = $Kingdoms
 @onready var save_system: SaveSystem = $SaveSystem
 @onready var camera: Camera2D = $Camera2D
 @onready var hud: Hud = $HUD
@@ -70,6 +71,12 @@ func _ready() -> void:
 	wars.agents = agents
 	wars.villages = villages
 	wars.event_log = event_log
+	wars.kingdoms = kingdoms
+	kingdoms.agents = agents
+	kingdoms.villages = villages
+	kingdoms.event_log = event_log
+	villages.kingdoms = kingdoms
+	agents.kingdoms = kingdoms
 	goals.agents = agents
 	goals.villages = villages
 	goals.era_changed.connect(_on_era_changed)
@@ -105,7 +112,7 @@ func _ready() -> void:
 	hud.zoom_fit_pressed.connect(_fit_camera)
 	if save_system.save_exists():
 		var data := save_system.load_game()
-		if save_system.apply_save(data, world, agents, villages, event_log, wars, goals):
+		if save_system.apply_save(data, world, agents, villages, event_log, wars, goals, kingdoms):
 			day = int(data.get("day", 1))
 			total_ticks = int(data.get("ticks", 0))
 			hud.set_hint("World loaded — welcome back!")
@@ -135,7 +142,7 @@ func _new_world() -> void:
 	hud.set_hint("New world! Paint terrain, then spawn people.")
 
 func _save_quietly() -> void:
-	save_system.save_game(world, agents, villages, event_log, day, total_ticks, wars, goals)
+	save_system.save_game(world, agents, villages, event_log, day, total_ticks, wars, goals, kingdoms)
 
 
 # --- simulation ------------------------------------------------------------
@@ -167,6 +174,7 @@ func _do_tick() -> void:
 	agents.tick(TICK_INTERVAL, season, day)
 	villages.tick(day)
 	wars.tick(day)  # raids, marches, battles, and their outcomes
+	kingdoms.tick(day)  # kingdoms: founding, kings, diplomacy, rebellion
 	goals.tick(day)  # eras, achievements, and the scenario
 	villages.era = goals.era  # Phase 15 — the houses redraw in the era's style
 	agents.era = goals.era  # Phase 16 — new adults are equipped in the era's material

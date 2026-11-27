@@ -13,7 +13,7 @@ const SAVE_PATH := "user://world.json"
 func save_exists() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)
 
-func save_game(world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog, day: int, ticks: int, wars: Wars = null, goals: Goals = null) -> bool:
+func save_game(world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog, day: int, ticks: int, wars: Wars = null, goals: Goals = null, kingdoms: Kingdoms = null) -> bool:
 	var data := {
 		"version": 5,
 		"seed": world.seed_value,
@@ -27,6 +27,7 @@ func save_game(world: GodSimWorld, agents: Agents, villages: Villages, event_log
 		"villages": _villages_to_data(villages),
 		"wars": wars.to_data() if wars != null else [],
 		"goals": _goals_to_data(goals),
+		"kingdoms": kingdoms.to_data() if kingdoms != null else [],
 		"log": event_log.to_data(),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -84,7 +85,7 @@ func _burning_to_data(world: GodSimWorld) -> Array:
 func _villages_to_data(villages: Villages) -> Array:
 	var out: Array = []
 	for v in villages.villages:
-		out.append({"name": v.name, "x": v.tile.x, "y": v.tile.y, "day": v.founded_day, "color": v.color.to_html(), "food": v.food, "wood": v.wood, "stone": v.stone, "iron": v.iron, "marble": v.marble, "steel": v.steel, "extra_houses": v.extra_houses_built, "blessed_until": v.blessed_until_day, "last_war": v.last_war_day})
+		out.append({"name": v.name, "x": v.tile.x, "y": v.tile.y, "day": v.founded_day, "color": v.color.to_html(), "food": v.food, "wood": v.wood, "stone": v.stone, "iron": v.iron, "marble": v.marble, "steel": v.steel, "extra_houses": v.extra_houses_built, "blessed_until": v.blessed_until_day, "last_war": v.last_war_day, "kingdom": v.kingdom})
 	return out
 
 ## Goals as a Dictionary (era, winters, wars won, achievements, and
@@ -106,7 +107,7 @@ func _goals_to_data(goals: Goals) -> Dictionary:
 ## or unusable (caller should generate a fresh world instead).
 ## Old saves have no "log" key — the history just starts empty — and
 ## no "berries" key — forests restock to full (see rebuild_berries).
-func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog, wars: Wars = null, goals: Goals = null) -> bool:
+func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog, wars: Wars = null, goals: Goals = null, kingdoms: Kingdoms = null) -> bool:
 	if data.is_empty():
 		return false
 	world.seed_value = int(data.get("seed", 0))
@@ -206,6 +207,9 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		# Phase 10 — the day its last war ended (old saves have none:
 		# it has never been at war, so it may raid at once).
 		nv.last_war_day = int(d.get("last_war", 0))
+		# Phase 17 — the kingdom it belongs to (old saves have none:
+		# -1, independent — Towns found kingdoms on the next tick).
+		nv.kingdom = int(d.get("kingdom", -1))
 		villages.villages.append(nv)
 	# Phase 10 — a war in progress carries over a save (old saves have
 	# none: no wars). Restored after the agents, so the raiders' war
@@ -215,6 +219,11 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		wars.from_data(data.get("wars", []))
 	# Phase 13 — goals (old saves have none: they start in the Stone
 	# Age with no achievements and a fresh scenario).
+	# Phase 17 — kingdoms (old saves have none: they start empty
+	# and Towns found kingdoms on the next tick). Restored after the
+	# villages, so the kingdom members point at real villages.
+	if kingdoms != null:
+		kingdoms.from_data(data.get("kingdoms", []))
 	if goals != null:
 		var gd: Dictionary = data.get("goals", {})
 		goals.era = int(gd.get("era", 0))

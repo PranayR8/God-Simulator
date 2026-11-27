@@ -51,6 +51,7 @@ var world: GodSimWorld = null
 var agents: Agents = null
 var villages: Villages = null
 var event_log: EventLog = null
+var kingdoms: Kingdoms = null  # set by Main; raids respect kingdoms and set wars
 
 var current_day: int = 1
 ## Each war: {"id": int, "attacker": int, "defender": int,
@@ -168,17 +169,34 @@ func _can_raid(ai: int) -> int:
 	if not hungry and not crowded:
 		return -1
 	# The nearest neighbour within raiding range, not already at war.
+	# Phase 17 — never raid your own kingdom or an ally. Prefer a
+	# village in a kingdom you are already at war with, so a war is
+	# fought between kingdoms, not just the two villages that started it.
 	var best := -1
 	var best_d := INF
+	var war_best := -1
+	var war_best_d := INF
 	for di in villages.villages.size():
 		if di == ai:
 			continue
 		if _is_at_war(di):
 			continue
+		if kingdoms != null:
+			var ka := kingdoms.kingdom_of(ai)
+			var kd := kingdoms.kingdom_of(di)
+			if ka >= 0 and ka == kd:
+				continue  # same kingdom: never raid your own
+			if kingdoms.relation_between(ka, kd) == "allied":
+				continue  # allies never raid each other
 		var d := Vector2(v.tile - villages.villages[di].tile).length()
 		if d < best_d:
 			best_d = d
 			best = di
+		if kingdoms != null and kingdoms.relation_between(kingdoms.kingdom_of(ai), kingdoms.kingdom_of(di)) == "war" and d < war_best_d:
+			war_best_d = d
+			war_best = di
+	if war_best >= 0 and war_best_d <= float(WAR_MAX_RANGE_TILES):
+		return war_best
 	if best < 0 or best_d > float(WAR_MAX_RANGE_TILES):
 		return -1
 	# The party needs enough adults to send.
@@ -215,6 +233,8 @@ func _start_war(ai: int, di: int) -> void:
 			a.war_target = target
 			a.has_target = false
 			sent += 1
+	if kingdoms != null:
+		kingdoms.note_raid(kingdoms.kingdom_of(ai), kingdoms.kingdom_of(di))
 	event_log.add(current_day, "%s has declared war on %s!" % [attacker.name, defender.name])
 	queue_redraw()
 
@@ -248,9 +268,14 @@ func _resolve_war(wi: int) -> void:
 		defender_force *= WALL_BONUS
 	# Phase 11 — a Strong leader's village fights 25% harder, on
 	# either side of the battle.
-	if agents.leader_trait(ai) == SimAgent.HERO_TRAIT_STRONG:
+	var atk_trait := agents.leader_trait(ai)
+	var def_trait := agents.leader_trait(di)
+	if kingdoms != null:
+		atk_trait = kingdoms.trait_for_village(ai)
+		def_trait = kingdoms.trait_for_village(di)
+	if atk_trait == SimAgent.HERO_TRAIT_STRONG:
 		attacker_force *= SimAgent.HERO_STRONG_MULT
-	if agents.leader_trait(di) == SimAgent.HERO_TRAIT_STRONG:
+	if def_trait == SimAgent.HERO_TRAIT_STRONG:
 		defender_force *= SimAgent.HERO_STRONG_MULT
 	var attacker_wins := attacker_force > defender_force
 	# The spoils: the winner takes half the loser's food, up to a cap.

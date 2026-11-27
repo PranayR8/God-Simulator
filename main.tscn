@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/world.gd" id="2_world"]
@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://scripts/disasters.gd" id="8_disasters"]
 [ext_resource type="Script" path="res://scripts/wars.gd" id="9_wars"]
 [ext_resource type="Script" path="res://scripts/goals.gd" id="10_goals"]
+[ext_resource type="Script" path="res://scripts/kingdoms.gd" id="11_kingdoms"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -37,6 +38,9 @@ script = ExtResource("9_wars")
 
 [node name="Goals" type="Node" parent="."]
 script = ExtResource("10_goals")
+
+[node name="Kingdoms" type="Node" parent="."]
+script = ExtResource("11_kingdoms")
 
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(768, 576)
