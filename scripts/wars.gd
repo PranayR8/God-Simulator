@@ -114,12 +114,15 @@ func tick(day: int) -> void:
 			continue
 		if int(war.get("state", 0)) == State.MARCH:
 			var defender: Villages.VillageData = villages.villages[di]
-			var radius := villages.territory_radius_px(defender)
 			var centre := world.tile_to_world(defender.tile.x, defender.tile.y)
 			var arrived := false
 			var arrival_pos := Vector2.ZERO
+			# A raider has arrived when they stand on the defender's
+			# land (a claimed tile) or right at its heart — the battle
+			# is fought on the village's own ground.
 			for a in party:
-				if a.pos.distance_to(centre) <= radius:
+				var at := world.world_to_tile(a.pos)
+				if villages.is_in_territory(defender, at) or a.pos.distance_to(centre) <= 2.0 * GodSimWorld.TILE:
 					arrived = true
 					arrival_pos = a.pos
 					break
@@ -457,9 +460,7 @@ func _draw() -> void:
 		# red is the colour of war.
 		for vi in [ai, di]:
 			var v: Villages.VillageData = villages.villages[vi]
-			var centre := world.tile_to_world(v.tile.x, v.tile.y)
-			var radius := villages.territory_radius_px(v)
-			draw_arc(centre, radius, 0, TAU, 64, Color(1.0, 0.15, 0.1, 0.9), 4.0)
+			villages.draw_territory_border(v, Color(1.0, 0.15, 0.1, 0.9), 4.0)
 		# The battle: crossed swords where the fighting is, pulsing so
 		# it reads as active, not a static mark.
 		if int(w.get("state", 0)) == State.BATTLE:

@@ -62,7 +62,7 @@ func _agents_to_data(agents: Agents) -> Array:
 		# are likewise stored for everyone (sheep keep 0, which they
 		# ignore) so a loaded world keeps its generations instead of
 		# resetting everyone to a newborn.
-		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job, "blessed": a.blessed, "sick": a.sick, "immune": a.immune, "at_war": a.at_war, "hero": a.hero, "hero_name": a.hero_name, "innate_trait": a.innate_trait, "hero_deed": a.hero_deed, "surname": a.surname, "generation": a.generation, "weapon_tier": a.weapon_tier, "armor_tier": a.armor_tier, "tool_tier": a.tool_tier, "acquired_traits": a.acquired_traits, "was_starving": a.was_starving})
+		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job, "blessed": a.blessed, "sick": a.sick, "immune": a.immune, "at_war": a.at_war, "hero": a.hero, "hero_name": a.hero_name, "innate_trait": a.innate_trait, "hero_deed": a.hero_deed, "surname": a.surname, "generation": a.generation, "weapon_tier": a.weapon_tier, "armor_tier": a.armor_tier, "tool_tier": a.tool_tier, "acquired_traits": a.acquired_traits, "was_starving": a.was_starving, "exploring": a.exploring})
 	return out
 
 ## Berries as a flat list of [x, y, count] triples (only tiles that
@@ -85,7 +85,10 @@ func _burning_to_data(world: GodSimWorld) -> Array:
 func _villages_to_data(villages: Villages) -> Array:
 	var out: Array = []
 	for v in villages.villages:
-		out.append({"name": v.name, "x": v.tile.x, "y": v.tile.y, "day": v.founded_day, "color": v.color.to_html(), "food": v.food, "wood": v.wood, "stone": v.stone, "iron": v.iron, "marble": v.marble, "steel": v.steel, "extra_houses": v.extra_houses_built, "blessed_until": v.blessed_until_day, "last_war": v.last_war_day, "kingdom": v.kingdom})
+		var tiles_arr: Array = []
+		for t in v.tiles.keys():
+			tiles_arr.append([t.x, t.y])
+		out.append({"name": v.name, "x": v.tile.x, "y": v.tile.y, "day": v.founded_day, "color": v.color.to_html(), "food": v.food, "wood": v.wood, "stone": v.stone, "iron": v.iron, "marble": v.marble, "steel": v.steel, "extra_houses": v.extra_houses_built, "blessed_until": v.blessed_until_day, "last_war": v.last_war_day, "kingdom": v.kingdom, "tiles": tiles_arr})
 	return out
 
 ## Goals as a Dictionary (era, winters, wars won, achievements).
@@ -156,6 +159,10 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		# The war itself is restored below, so the mark points at a
 		# real war again instead of dangling.
 		na.at_war = int(d.get("at_war", -1))
+		# Phase 19 — whether they were out exploring (old saves have
+		# none: at home). An explorer who loads back inside the border
+		# stops exploring on the next target pick.
+		na.exploring = bool(d.get("exploring", false))
 		# Phase 11 — a hero's name, trait and deed (old saves have
 		# none: nobody was a hero yet).
 		na.hero = bool(d.get("hero", false))
@@ -213,7 +220,18 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		# Phase 17 — the kingdom it belongs to (old saves have none:
 		# -1, independent — Towns found kingdoms on the next tick).
 		nv.kingdom = int(d.get("kingdom", -1))
-		villages.villages.append(nv)
+		# Phase 19 — the claimed tiles (old saves have none: the
+		# village re-claims its starting square and grows from there).
+		var saved_tiles: Array = d.get("tiles", [])
+		if saved_tiles.is_empty():
+			villages.villages.append(nv)
+			villages.claim_starting_territory(nv)
+		else:
+			for pair in saved_tiles:
+				var p: Array = pair
+				if p.size() >= 2:
+					nv.tiles[Vector2i(int(p[0]), int(p[1]))] = true
+			villages.villages.append(nv)
 	# Phase 10 — a war in progress carries over a save (old saves have
 	# none: no wars). Restored after the agents, so the raiders' war
 	# marks point at a real war. Skipped when the caller did not pass

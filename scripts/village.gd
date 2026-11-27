@@ -7,12 +7,18 @@ extends Node2D
 ## together (within FOUND_RADIUS tiles). A group that forms close to an
 ## existing village joins it instead of founding a new one right next
 ## door, so villages stay well spaced and their territories stay apart.
-## Every village owns a territory — a circle around its centre whose
-## radius grows with its population and stops at the halfway point to
-## its nearest neighbour, so two territories meet at their border but
-## never overlap. Every person belongs to exactly one village (or to
-## none, as a nomad). Citizens stay near home and wander inside their
-## own border; a nomad who comes within a few tiles of a village's
+## Every village owns a territory — a claimed set of square tiles
+## around its centre, WorldBox-style: the border is blocky, and the
+## shape is whatever the village needed. The territory grows tile by
+## tile as the village grows, and each new tile is claimed for a
+## reason — a hungry village reaches for the forest, a village with
+## miners reaches for the mountains, a village with room to grow
+## takes the open grass. Two territories never overlap: a tile
+## belongs to one village, and a village can only claim tiles its
+## neighbours haven't. Every person belongs to exactly one village
+## (or to none, as a nomad). Citizens live near home but are free to
+## wander out and explore the world beyond the border — they always
+## drift back. A nomad who comes within a few tiles of a village's
 ## border joins that village, and children are born into their
 ## parent's village.
 ##
@@ -60,6 +66,13 @@ class VillageData:
 	## one; the kingdom's king (the capital's oldest hero) boosts every
 	## village in it.
 	var kingdom: int = -1
+	## Phase 19 — the territory: the set of square tiles this village
+	## has claimed (Dictionary: Vector2i -> true). The border is the
+	## outline of these tiles, and the shape is whatever the village
+	## needed — forest when hungry, mountains when mining, grass when
+	## growing. A tile belongs to one village; claiming only ever adds
+	## tiles adjacent to ones already claimed.
+	var tiles: Dictionary = {}
 	## The first day this village may join a kingdom again (0 = no
 	## cooldown). A village that rebels is barred from rejoining for
 	## 30 days, so a secession is not undone the next morning — it
@@ -90,7 +103,8 @@ const FOUND_RADIUS := 4    # in tiles
 const MIN_VILLAGE_GAP := 8  # tiles between village centres
 const FOUND_JOIN_MARGIN := 4  # tiles beyond a village's territory where a group still joins it instead of founding
 const POP_PER_HOUSE := 3
-const MIN_TERRITORY := 5   # territory radius in tiles, even for a young village
+const START_TERRITORY_HALF := 2  # a new village claims a 5x5 square of tiles (water skipped)
+const GROW_TILES_PER_SCAN := 2  # tiles a village may claim per 8th-tick scan while below its cap
 
 ## Phase 6 — the stockpile economy. A builder-bonus house costs this
 ## much wood; a woodcutter gets this much wood per felled tile. One
@@ -100,13 +114,18 @@ const WOOD_PER_TILE := 2.0
 
 ## Growth stages (Phase 4): a village's stage is its citizen count —
 ## Hamlet at 6, Village at 15, Town at 30, City at 60. Each stage
-## grows the territory cap, lets more (and bigger) houses appear, and
-## at Town the village gains a wall ring, at City a keep. The stage is
-## always derived from the current population, so a village that loses
-## people falls back down a stage just as it climbed up.
+## grows the territory cap (in claimed tiles), lets more (and bigger)
+## houses appear, and at Town the village gains a wall ring, at City a
+## keep. The stage is always derived from the current population, so a
+## village that loses people falls back down a stage just as it climbed
+## up.
 const STAGE_NAMES := ["Hamlet", "Village", "Town", "City"]
 const STAGE_MIN_POP := [6, 15, 30, 60]
-const STAGE_TERRITORY_CAPS := [7, 10, 13, 16]
+## Phase 19 — the territory cap, in claimed tiles per stage. Roughly
+## the area the old circular territories held (a radius-7 circle is
+## ~150 tiles, radius 16 is ~800), so a village has about as much land
+## as before — it is just square now, and shaped by what it needed.
+const STAGE_TERRITORY_TILES := [150, 300, 500, 800]
 const STAGE_HOUSE_CAPS := [12, 16, 20, 24]
 const STAGE_HOUSE_SCALES := [1.0, 1.15, 1.3, 1.45]
 
@@ -174,6 +193,8 @@ func tick(p_day: int) -> void:
 		_check_stages()
 		_assign_jobs()
 		_build_houses()
+		for v in villages:
+			grow_territory(v)
 	queue_redraw()
 
 func _try_found(current_day: int) -> void:
@@ -211,6 +232,7 @@ func _try_found(current_day: int) -> void:
 		var new_index := villages.size()
 		var color: Color = VILLAGE_COLORS[new_index % VILLAGE_COLORS.size()]
 		villages.append(VillageData.new(village_name, tile, current_day, color))
+		claim_starting_territory(villages[new_index])
 		village_founded.emit(village_name)
 		# The people standing here are the founders — they belong to the
 		# new village from the moment it exists. The first of them is
@@ -271,14 +293,15 @@ func _try_join_nearby_village(tile: Vector2i) -> bool:
 			group.append(a)
 	if group.is_empty():
 		return false
-	# Closest member to the village decides whether the group is near.
-	var home := world.tile_to_world(best.tile.x, best.tile.y)
-	var closest := INF
+	# Closest member to the village decides whether the group is near:
+	# if any member stands on the village's land, or within the join
+	# margin of its border, the group is touching the village and joins.
+	var touching := false
 	for a in group:
-		var d: float = a.pos.distance_to(home) / GodSimWorld.TILE
-		if d < closest:
-			closest = d
-	if closest > influence_radius_tiles(best):
+		if near_territory(best, world.world_to_tile(a.pos), FOUND_JOIN_MARGIN):
+			touching = true
+			break
+	if not touching:
 		return false
 	var joined := 0
 	for a in group:
@@ -305,10 +328,13 @@ func _assign_people() -> void:
 			continue
 		var best := -1
 		var best_d := INF
+		var at := world.world_to_tile(a.pos)
 		for i in villages.size():
 			var v := villages[i]
+			if not near_territory(v, at, FOUND_JOIN_MARGIN):
+				continue
 			var d := a.pos.distance_to(world.tile_to_world(v.tile.x, v.tile.y))
-			if d <= float(influence_radius_tiles(v) * GodSimWorld.TILE) and d < best_d:
+			if d < best_d:
 				best = i
 				best_d = d
 		if best >= 0:
@@ -421,70 +447,182 @@ func label_text(v: VillageData) -> String:
 func is_blessed(v: VillageData, day: int) -> bool:
 	return day < v.blessed_until_day
 
-## Which village's territory contains this tile (nearest centre wins),
-## or -1 if the tile belongs to no village. Bless Village (Phase 8)
-## targets through this — the god taps a village's land.
+## Which village's territory contains this tile, or -1 if the tile
+## belongs to no village. A tile belongs to one village — the claimed
+## set is the source of truth, so there is no nearest-centre guessing.
+## Bless Village (Phase 8) targets through this — the god taps a
+## village's land.
 func village_at_tile(tile: Vector2i) -> int:
-	var pos := world.tile_to_world(tile.x, tile.y)
-	var best := -1
-	var best_d := 1e9
-	for i in villages.size():
-		var v: VillageData = villages[i]
-		var center := world.tile_to_world(v.tile.x, v.tile.y)
-		var d := pos.distance_to(center)
-		if d <= territory_radius_px(v) and d < best_d:
-			best = i
-			best_d = d
-	return best
+	return _tile_owner(tile)
 
-## The territory radius from population alone, before the neighbour
-## cap — the village's natural size, used for its sphere of
-## influence (see _try_join_nearby_village). The cap grows with the
-## stage, so a hamlet becoming a town visibly gains land: 4 + pop/3
-## tiles, at most 7 as a Hamlet, 10 as a Village, 13 as a Town,
-## 16 as a City.
-func _population_radius_tiles(v: VillageData) -> int:
-	return clampi(4 + population_of(v) / 3, MIN_TERRITORY, STAGE_TERRITORY_CAPS[stage_of(v)])
+## Phase 19 — the territory, as claimed square tiles.
+##
+## Is this tile inside the village's territory (claimed by it)?
+func is_in_territory(v: VillageData, tile: Vector2i) -> bool:
+	return v.tiles.has(tile)
 
-## A village's territory grows with its citizens: 4 tiles plus one per
-## 3 citizens, between 5 and its stage cap — but it never overlaps a
-## neighbour's territory. The border between two villages sits at the
-## halfway point: each village's radius is capped at half the distance
-## to its nearest neighbour (rounded down, so the two radii together
-## can never exceed the distance between the villages). A lone village
-## with no neighbours just uses its population radius. The 2-tile floor
-## is safe: villages always found at least ~5.7 tiles apart, so half
-## that distance is never below 2.
-func territory_radius_tiles(v: VillageData) -> int:
-	var r := _population_radius_tiles(v)
-	var gap := _nearest_neighbour_gap_tiles(v)
-	if gap < INF:
-		r = mini(r, int(gap * 0.5))
-	return maxi(r, 2)
+## Is this tile inside the territory, or within `margin` tiles of it
+## (Chebyshev distance — a square ring around the border)? This is the
+## village's sphere of influence: a nomad inside it joins the village
+## (see _assign_people), a group inside it joins instead of founding
+## (see _try_join_nearby_village), and a citizen may forage inside it.
+## It is checked by looking for a claimed tile in the (2m+1)^2 window
+## around the tile, so it is cheap and exact for a blocky border.
+func near_territory(v: VillageData, tile: Vector2i, margin: int) -> bool:
+	for dy in range(-margin, margin + 1):
+		for dx in range(-margin, margin + 1):
+			if v.tiles.has(Vector2i(tile.x + dx, tile.y + dy)):
+				return true
+	return false
 
-## Distance in tiles to the closest other village (INF when alone).
-func _nearest_neighbour_gap_tiles(v: VillageData) -> float:
-	var best := INF
-	for other in villages:
-		if other == v:
-			continue
-		var d := Vector2(v.tile - other.tile).length()
-		if d < best:
+## How many tiles the village has claimed.
+func territory_tile_count(v: VillageData) -> int:
+	return v.tiles.size()
+
+## The territory cap, in claimed tiles, from the village's stage —
+## 150 as a Hamlet, 300 as a Village, 500 as a Town, 800 as a City.
+## A village that loses people falls back a stage and stops growing
+## (it keeps the land it already has).
+func territory_cap_tiles(v: VillageData) -> int:
+	return STAGE_TERRITORY_TILES[stage_of(v)]
+
+## How far the territory reaches from the centre, in pixels — the
+## furthest claimed tile. Used where a single "how big is this
+## village" number is needed (a war party has arrived, a house's
+## reach, the label's clearance). The border itself is the tile
+## outline, not this circle.
+func territory_extent_px(v: VillageData) -> float:
+	var center := world.tile_to_world(v.tile.x, v.tile.y)
+	var best := 0.0
+	for t in v.tiles.keys():
+		var d := world.tile_to_world(t.x, t.y).distance_to(center)
+		if d > best:
 			best = d
 	return best
 
-## A village's sphere of influence: its population territory plus the
-## join margin. Nomads inside this range join the village (see
-## _assign_people); groups inside it join instead of founding (see
-## _try_join_nearby_village). Uses the population radius, not the
-## capped territory, so a crowded village's pull doesn't shrink with
-## its border — the cap is about drawing borders, not about who
-## belongs where.
-func influence_radius_tiles(v: VillageData) -> int:
-	return _population_radius_tiles(v) + FOUND_JOIN_MARGIN
+## Claim the starting territory: a square around the centre, half
+## width START_TERRITORY_HALF (5x5). Water is never claimed — a
+## village founded on a shore just has a smaller, shore-shaped start.
+## Called once, when the village is founded.
+func claim_starting_territory(v: VillageData) -> void:
+	for dy in range(-START_TERRITORY_HALF, START_TERRITORY_HALF + 1):
+		for dx in range(-START_TERRITORY_HALF, START_TERRITORY_HALF + 1):
+			var t := Vector2i(v.tile.x + dx, v.tile.y + dy)
+			if not world.in_bounds(t.x, t.y):
+				continue
+			if world.get_terrain(t.x, t.y) == GodSimWorld.Terrain.WATER:
+				continue
+			v.tiles[t] = true
 
-func territory_radius_px(v: VillageData) -> float:
-	return float(territory_radius_tiles(v) * GodSimWorld.TILE)
+## Grow the territory: claim up to GROW_TILES_PER_SCAN new tiles, if
+## the village is below its stage cap. Each new tile is claimed for a
+## reason, so the shape is what the village needed — a hungry village
+## reaches for the forest, a village with miners reaches for the
+## mountains, a village with room to grow takes the open grass, and
+## every claim favours a tile hugged by land it already owns, so the
+## border stays compact instead of sprawling into a thin line. A tile
+## is only ever claimed if it touches the territory (4-neighbourhood),
+## is inside the map, is not water, and no other village owns it.
+func grow_territory(v: VillageData) -> void:
+	if world == null:
+		return
+	var cap := territory_cap_tiles(v)
+	for _i in GROW_TILES_PER_SCAN:
+		if v.tiles.size() >= cap:
+			return
+		var best := Vector2i(-1, -1)
+		var best_score := -1.0
+		var seen := {}
+		for t in v.tiles.keys():
+			for dir in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var c: Vector2i = t + dir
+				if seen.has(c):
+					continue
+				seen[c] = true
+				if v.tiles.has(c):
+					continue
+				if not world.in_bounds(c.x, c.y):
+					continue
+				if world.get_terrain(c.x, c.y) == GodSimWorld.Terrain.WATER:
+					continue
+				if _tile_owner(c) >= 0:
+					continue
+				var sc := _score_claim_tile(v, c)
+				if sc > best_score:
+					best_score = sc
+					best = c
+		if best.x < 0:
+			return
+		v.tiles[best] = true
+
+## Which village owns this tile, or -1 (no village claims it). The
+## tile set is the single source of truth — a tile belongs to one
+## village, so territories can never overlap.
+func _tile_owner(tile: Vector2i) -> int:
+	for i in villages.size():
+		if villages[i].tiles.has(tile):
+			return i
+	return -1
+
+## How much this village wants a tile, when it grows. Forest is food
+## and timber, so a hungry village (less than ~2 days of food in the
+## store) or a village short on wood reaches for it hard; mountains
+## are the mine, so a village with miners reaches for them; grass is
+## just room to grow. Every candidate also gains a point per claimed
+## neighbour, so the border fills in its gaps instead of reaching out
+## in a thin arm.
+func _score_claim_tile(v: VillageData, tile: Vector2i) -> float:
+	var terrain := world.get_terrain(tile.x, tile.y)
+	var sc := 0.0
+	match terrain:
+		GodSimWorld.Terrain.FOREST:
+			sc = 4.0
+		GodSimWorld.Terrain.MOUNTAIN:
+			sc = 6.0
+		_:
+			sc = 2.0
+	for dir in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		if v.tiles.has(tile + dir):
+			sc += 1.0
+	var pop := population_of(v)
+	if terrain == GodSimWorld.Terrain.FOREST:
+		if v.food < float(pop) * 2.0:
+			sc += 8.0
+		if v.wood < HOUSE_WOOD_COST * 2.0:
+			sc += 6.0
+	if terrain == GodSimWorld.Terrain.MOUNTAIN and _miners_of(v) > 0:
+		sc += 4.0
+	return sc
+
+## Miners among this village's citizens.
+func _miners_of(v: VillageData) -> int:
+	if agents == null:
+		return 0
+	var idx := villages.find(v)
+	if idx < 0:
+		return 0
+	var n := 0
+	for a in agents.agents:
+		if a.kind == SimAgent.Kind.PERSON and a.village == idx and a.job == SimAgent.JOB_MINER:
+			n += 1
+	return n
+
+## How far the territory reaches in one direction, in pixels — the
+## last claimed tile along a ray from the centre. Houses are placed
+## inside this reach, so they never stand outside the border.
+func _extent_in_direction(v: VillageData, angle: float) -> float:
+	var center := world.tile_to_world(v.tile.x, v.tile.y)
+	var dir := Vector2(cos(angle), sin(angle))
+	var step := float(GodSimWorld.TILE) * 0.5
+	var best := 0.0
+	var d := step
+	while d < 40.0 * GodSimWorld.TILE:
+		var t := world.world_to_tile(center + dir * d)
+		if not v.tiles.has(t):
+			break
+		best = d
+		d += step
+	return best
 
 func house_count(v: VillageData) -> int:
 	# The houses actually standing: the base dwellings (one per 3
@@ -507,39 +645,28 @@ func builders_of(v: VillageData) -> int:
 			n += 1
 	return n
 
-## Forest tiles inside this village's territory — the land its jobs
-## work with. Used to pick the job mix.
+## Forest tiles inside this village's territory — the claimed tiles
+## that are forest. The land its jobs work with; used to pick the job
+## mix. (A village that claimed forest when it was hungry has food to
+## farm; one that never needed it has none.)
 func _forest_tiles_in_territory(v: VillageData) -> int:
 	if world == null:
 		return 0
-	var r := territory_radius_tiles(v)
 	var n := 0
-	for dy in range(-r, r + 1):
-		for dx in range(-r, r + 1):
-			if Vector2i(dx, dy).length() > float(r):
-				continue
-			var t := Vector2i(v.tile.x + dx, v.tile.y + dy)
-			if not world.in_bounds(t.x, t.y):
-				continue
-			if world.get_terrain(t.x, t.y) == GodSimWorld.Terrain.FOREST:
-				n += 1
+	for t in v.tiles.keys():
+		if world.get_terrain(t.x, t.y) == GodSimWorld.Terrain.FOREST:
+			n += 1
 	return n
 
-## Mountains inside the territory (for the miner share of jobs).
+## Mountains inside the territory (for the miner share of jobs) — the
+## claimed tiles that are mountains.
 func _mountain_tiles_in_territory(v: VillageData) -> int:
 	if world == null:
 		return 0
-	var r := territory_radius_tiles(v)
 	var n := 0
-	for dy in range(-r, r + 1):
-		for dx in range(-r, r + 1):
-			if Vector2i(dx, dy).length() > float(r):
-				continue
-			var t := Vector2i(v.tile.x + dx, v.tile.y + dy)
-			if not world.in_bounds(t.x, t.y):
-				continue
-			if world.get_terrain(t.x, t.y) == GodSimWorld.Terrain.MOUNTAIN:
-				n += 1
+	for t in v.tiles.keys():
+		if world.get_terrain(t.x, t.y) == GodSimWorld.Terrain.MOUNTAIN:
+			n += 1
 	return n
 
 ## Give every adult citizen a job, based on what's nearby. Runs on the
@@ -635,20 +762,70 @@ func _draw_crown(pos: Vector2) -> void:
 ## A new Hamlet clusters near the centre; a City spreads its houses
 ## across its land instead of piling them all on one spot. The
 ## square-root spacing keeps the density even — houses fill the area
-## instead of clumping at the centre or ringing the edge.
+## instead of clumping at the centre or ringing the edge. Each house's
+## reach is the territory's extent in its own direction, so a house
+## never stands outside a border that grew toward the forest on one
+## side and stayed short on the other.
 func house_positions(v: VillageData) -> Array[Vector2]:
 	var center := world.tile_to_world(v.tile.x, v.tile.y)
-	var radius := territory_radius_px(v)
-	var built_radius := minf(radius * 0.65, 24.0 + 2.6 * float(population_of(v)))
-	built_radius = maxf(built_radius, 20.0)
 	var houses := house_count(v)
 	var out: Array[Vector2] = []
 	for i in houses:
 		var angle := float(i) * 2.39996
+		var extent := _extent_in_direction(v, angle)
+		var built_radius := minf(extent * 0.65, 24.0 + 2.6 * float(population_of(v)))
+		built_radius = maxf(built_radius, 20.0)
 		var frac := sqrt(float(i) / float(maxi(houses - 1, 1)))
 		var hradius := 16.0 + (built_radius - 16.0) * frac
 		out.append(center + Vector2(cos(angle), sin(angle)) * hradius)
 	return out
+
+## Draw the territory's border — the blocky outline of the claimed
+## tiles, WorldBox-style: for every claimed tile, every edge that
+## borders land this village does not own gets a line in the border
+## colour. `width` is the line width. Used by _draw and by Wars (the
+## red war border, wider than the village's own so it covers it).
+func draw_territory_border(v: VillageData, border_color: Color, width: float) -> void:
+	var half := float(GodSimWorld.TILE) * 0.5
+	for t in v.tiles.keys():
+		var c := world.tile_to_world(t.x, t.y)
+		if not v.tiles.has(Vector2i(t.x, t.y - 1)):
+			draw_line(c + Vector2(-half, -half), c + Vector2(half, -half), border_color, width)
+		if not v.tiles.has(Vector2i(t.x, t.y + 1)):
+			draw_line(c + Vector2(-half, half), c + Vector2(half, half), border_color, width)
+		if not v.tiles.has(Vector2i(t.x - 1, t.y)):
+			draw_line(c + Vector2(-half, -half), c + Vector2(-half, half), border_color, width)
+		if not v.tiles.has(Vector2i(t.x + 1, t.y)):
+			draw_line(c + Vector2(half, -half), c + Vector2(half, half), border_color, width)
+
+## Draw the territory's faint tint — the village colour over its
+## claimed tiles. Tiles are grouped by row and each run of adjacent
+## tiles in a row is one rect, so a compact territory is a few dozen
+## rects, not one per tile.
+func draw_territory_tint(v: VillageData) -> void:
+	var half := float(GodSimWorld.TILE) * 0.5
+	var tint := Color(v.color, 0.06)
+	var rows := {}
+	for t in v.tiles.keys():
+		if not rows.has(t.y):
+			rows[t.y] = []
+		rows[t.y].append(t.x)
+	for y in rows.keys():
+		var xs: Array = rows[y]
+		xs.sort()
+		var run_start: int = xs[0]
+		var run_end: int = xs[0]
+		for i in range(1, xs.size()):
+			var x: int = xs[i]
+			if x == run_end + 1:
+				run_end = x
+			else:
+				var c0 := world.tile_to_world(run_start, y)
+				draw_rect(Rect2(c0 + Vector2(-half, -half), Vector2(float(run_end - run_start + 1) * GodSimWorld.TILE, GodSimWorld.TILE)), tint)
+				run_start = x
+				run_end = x
+		var c1 := world.tile_to_world(run_start, y)
+		draw_rect(Rect2(c1 + Vector2(-half, -half), Vector2(float(run_end - run_start + 1) * GodSimWorld.TILE, GodSimWorld.TILE)), tint)
 
 func _draw() -> void:
 	if world == null:
@@ -656,24 +833,26 @@ func _draw() -> void:
 	var font: Font = ThemeDB.fallback_font
 	for v in villages:
 		var center := world.tile_to_world(v.tile.x, v.tile.y)
-		var radius := territory_radius_px(v)
 		var stage := stage_of(v)
-		# Territory: a faint tint of the village colour, with a border
-		# circle so the edge of the land is visible. A blessed village
-		# (Phase 8) wears a gold border instead, so you can see at a
-		# glance where the god's favour rests.
+		# Territory: a faint tint of the village colour over its claimed
+		# tiles, with a blocky border (WorldBox-style) so the edge of
+		# the land is visible — and so you can see the shape the village
+		# grew into. A blessed village (Phase 8) wears a gold border
+		# instead, so you can see at a glance where the god's favour
+		# rests. A kingdom's villages wear the kingdom colour.
 		var border_color := v.color
 		if kingdoms != null and v.kingdom >= 0 and v.kingdom < kingdoms.kingdoms.size():
 			border_color = kingdoms.kingdoms[v.kingdom].color
-		draw_circle(center, radius, Color(v.color, 0.06))
-		if is_blessed(v, current_day):
-			draw_arc(center, radius, 0, TAU, 64, Color(1.0, 0.85, 0.2, 0.9), 3.0)
-		else:
-			draw_arc(center, radius, 0, TAU, 64, Color(border_color, 0.65), 2.0)
-		# A wall ring at Town and above — a stone circle just inside
-		# the territory border.
+		draw_territory_tint(v)
+		# A wall at Town and above — the border drawn thick in stone
+		# grey first, with the village colour on top, so the wall reads
+		# as a wall and the colour still says whose it is.
 		if stage >= 2:
-			draw_arc(center, radius - 6.0, 0, TAU, 64, Color("#7d7468"), 3.0)
+			draw_territory_border(v, Color("#7d7468"), 4.0)
+		if is_blessed(v, current_day):
+			draw_territory_border(v, Color(1.0, 0.85, 0.2, 0.9), 3.0)
+		else:
+			draw_territory_border(v, Color(border_color, 0.65), 2.0)
 		var houses := house_count(v)
 		var house_scale: float = STAGE_HOUSE_SCALES[stage]
 		for hp in house_positions(v):

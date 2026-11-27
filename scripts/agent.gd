@@ -131,6 +131,14 @@ func tool_name() -> String:
 
 var village: int = -1  # index into Villages.villages; -1 = no village yet (a nomad)
 
+## Exploration (Phase 19). A villager is free to leave the village and
+## explore the world beyond the border — they walk out, look around,
+## and drift back home. While exploring they are still a citizen of
+## their village; they just aren't at home right now. A hungry person
+## never explores (they go looking for food instead), and a raider
+## never explores (they march to war instead).
+var exploring: bool = false
+
 ## Blessings (Phase 8). A blessed person is marked by the god: they walk
 ## faster, recover health faster, and live longer. The blessing is for
 ## life — it is set when the god blesses them and never wears off.

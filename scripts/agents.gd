@@ -29,6 +29,14 @@ const STARVE_DRAIN_PER_TICK := 100.0 / 120.0  # health 100 → 0 in 1 day of sta
 const HEALTH_REGEN_PER_TICK := 2.0  # health recovered per tick while fed
 const FORAGE_RANGE := 20  # tiles; how far a hungry person will walk for food
 const FORAGE_MARGIN := 4  # tiles past their territory a citizen may forage
+## Phase 19 — exploration. When a villager picks a new target, this is
+## the chance they walk out past the border to explore instead of
+## wandering at home; an explorer may go this far beyond the border
+## before they turn for home, and they stop exploring once they are
+## back within this many tiles of the border.
+const EXPLORE_CHANCE := 0.25
+const EXPLORE_RANGE_TILES := 12
+const EXPLORE_RETURN_MARGIN := 2
 
 ## Seasons (Phase 7). Winter cold: an unprotected person freezes in
 ## ~5 days (health 100 over 600 ticks); a walled village (Town/City)
@@ -371,12 +379,11 @@ func _do_job(a: SimAgent) -> void:
 	if a.village < 0 or villages == null or a.village >= villages.villages.size():
 		return
 	var v: Villages.VillageData = villages.villages[a.village]
-	var radius := villages.territory_radius_px(v)
 	if a.job == SimAgent.JOB_FARMER:
 		a.job_timer = 15.0
 		# Phase 6: the farmer harvests food into the village store —
 		# one unit per 15 ticks (8 a day) — but only where there's
-		# forest to farm in the inner half of the territory. The berries
+		# forest to farm among the village's claimed tiles. The berries
 		# on the map are natural regrowth now, foraged when the store is
 		# empty. (Phase 5's tend — adding a berry to the map — is
 		# replaced by this: the farmer's output is the stockpile, and
@@ -385,7 +392,11 @@ func _do_job(a: SimAgent) -> void:
 		# bumper crop to carry the village through winter); Winter
 		# grows nothing (the land is frozen), so the village lives off
 		# what it stored. Spring and Summer are the normal 1 unit.
-		if _has_forest_in_inner_half(v, radius * 0.5) and season != GodSimWorld.SEASON_WINTER and not world.is_drought():
+		# Phase 19 — the farmer works the forest the village claimed
+		# (a hungry village claims forest first, so there is land to
+		# farm); woodcutters clear the far edge, so they don't eat the
+		# farmers' land.
+		if _has_forest_in_territory(v) and season != GodSimWorld.SEASON_WINTER and not world.is_drought():
 			var gain := 1.0
 			if season == GodSimWorld.SEASON_AUTUMN:
 				gain = HARVEST_AUTUMN_FOOD
@@ -404,7 +415,7 @@ func _do_job(a: SimAgent) -> void:
 			v.food += gain
 	elif a.job == SimAgent.JOB_WOODCUTTER:
 		a.job_timer = 120.0
-		var t := _furthest_forest_tile(v, radius * 0.5, radius + 2.0 * GodSimWorld.TILE)
+		var t := _furthest_forest_tile(v)
 		if t.x >= 0:
 			world.set_terrain(t.x, t.y, GodSimWorld.Terrain.GRASS)
 			# Phase 6: felling a tile yields timber for the store.
@@ -417,7 +428,7 @@ func _do_job(a: SimAgent) -> void:
 		# its resource goes into the village store. Stone is common,
 		# iron rarer, marble rarer still, steel the rarest — and the
 		# eras advance on what the villages have stockpiled.
-		var t := _nearest_mountain_tile(v, radius + 2.0 * GodSimWorld.TILE)
+		var t := _nearest_mountain_tile(v)
 		if t.x >= 0:
 			var res := world.mountain_resource_at(t.x, t.y)
 			world.set_terrain(t.x, t.y, GodSimWorld.Terrain.GRASS)
@@ -433,75 +444,67 @@ func _do_job(a: SimAgent) -> void:
 				GodSimWorld.RES_STEEL:
 					v.steel += haul
 
-## Is there any forest to farm in the inner half of the territory?
-## A farmer only produces food where there's land to farm — a village
-## on open grass has no farmers at all (see _assign_jobs), and a
-## village whose inner forest is gone stops producing until the land
-## recovers. Woodcutters only clear the outer ring, so they don't eat
-## the farmers' land. Picking a forest tile directly (instead of a
-## random tile and hoping it's forest) is what makes farmers actually
-## feed a village — on open land with only a few forest tiles, a random
-## pick almost never lands on one.
-func _has_forest_in_inner_half(v: Villages.VillageData, max_r: float) -> bool:
+## Is there any forest to farm in the INNER half of the territory —
+## within half the territory's reach of the centre? A farmer only
+## produces food where there's land to farm — a village on open grass
+## has no farmers at all (see _assign_jobs), and a village whose inner
+## forest is gone stops producing until the land recovers. Woodcutters
+## clear only the outer forest, so they never eat the farmers' land.
+## Picking a forest tile directly (instead of a random tile and hoping
+## it's forest) is what makes farmers actually feed a village — on open
+## land with only a few forest tiles, a random pick almost never lands
+## on one.
+func _has_forest_in_territory(v: Villages.VillageData) -> bool:
 	var center := world.tile_to_world(v.tile.x, v.tile.y)
-	var r_tiles := int(ceil(max_r / GodSimWorld.TILE))
-	for dy in range(-r_tiles, r_tiles + 1):
-		for dx in range(-r_tiles, r_tiles + 1):
-			var t := Vector2i(v.tile.x + dx, v.tile.y + dy)
-			if not world.in_bounds(t.x, t.y):
-				continue
-			if world.get_terrain(t.x, t.y) != GodSimWorld.Terrain.FOREST:
-				continue
-			if world.tile_to_world(t.x, t.y).distance_to(center) > max_r:
-				continue
+	var inner := villages.territory_extent_px(v) * 0.5
+	for t in v.tiles.keys():
+		if world.get_terrain(t.x, t.y) != GodSimWorld.Terrain.FOREST:
+			continue
+		if world.tile_to_world(t.x, t.y).distance_to(center) <= inner:
 			return true
 	return false
 
-## The forest tile furthest from the village centre inside the annulus
-## [min_r, max_r] — the forest edge, which is what a woodcutter clears.
-## Returns (-1,-1) when there is no forest in the ring.
-func _furthest_forest_tile(v: Villages.VillageData, min_r: float, max_r: float) -> Vector2i:
+## The forest tile furthest from the village centre among the claimed
+## tiles OUTSIDE the inner half — the forest edge, which is what a
+## woodcutter clears. The inner forest is the farmers' land and is
+## never felled. Returns (-1,-1) when the village has no outer forest
+## (a small forest is all inner, so the woodcutter leaves it alone).
+func _furthest_forest_tile(v: Villages.VillageData) -> Vector2i:
 	var center := world.tile_to_world(v.tile.x, v.tile.y)
+	var inner := villages.territory_extent_px(v) * 0.5
 	var best := Vector2i(-1, -1)
 	var best_d := -1.0
-	var r_tiles := int(ceil(max_r / GodSimWorld.TILE))
-	for dy in range(-r_tiles, r_tiles + 1):
-		for dx in range(-r_tiles, r_tiles + 1):
-			var t := Vector2i(v.tile.x + dx, v.tile.y + dy)
-			if not world.in_bounds(t.x, t.y):
-				continue
-			if world.get_terrain(t.x, t.y) != GodSimWorld.Terrain.FOREST:
-				continue
-			var d := world.tile_to_world(t.x, t.y).distance_to(center)
-			if d < min_r or d > max_r:
-				continue
-			if d > best_d:
-				best_d = d
-				best = t
+	for t in v.tiles.keys():
+		if world.get_terrain(t.x, t.y) != GodSimWorld.Terrain.FOREST:
+			continue
+		var d := world.tile_to_world(t.x, t.y).distance_to(center)
+		if d <= inner:
+			continue
+		# Ties (the corners of a square are all the same distance)
+		# break toward the largest x, then the largest y, so the pick
+		# is the same every time.
+		if d > best_d or (is_equal_approx(d, best_d) and (t.x > best.x or (t.x == best.x and t.y > best.y))):
+			best_d = d
+			best = t
 	return best
 
-## The mountain tile nearest the village centre within max_r — the
-## one a miner works first, so the village uses its closest peaks
-## before reaching further out. Returns (-1,-1) when there is no
-## mountain in range.
-func _nearest_mountain_tile(v: Villages.VillageData, max_r: float) -> Vector2i:
+## The mountain tile nearest the village centre among the claimed
+## tiles — the one a miner works first, so the village uses its
+## closest peaks before reaching further out. Returns (-1,-1) when
+## the village has claimed no mountain.
+func _nearest_mountain_tile(v: Villages.VillageData) -> Vector2i:
 	var center := world.tile_to_world(v.tile.x, v.tile.y)
 	var best := Vector2i(-1, -1)
 	var best_d := INF
-	var r_tiles := int(ceil(max_r / GodSimWorld.TILE))
-	for dy in range(-r_tiles, r_tiles + 1):
-		for dx in range(-r_tiles, r_tiles + 1):
-			var t := Vector2i(v.tile.x + dx, v.tile.y + dy)
-			if not world.in_bounds(t.x, t.y):
-				continue
-			if world.get_terrain(t.x, t.y) != GodSimWorld.Terrain.MOUNTAIN:
-				continue
-			var d := world.tile_to_world(t.x, t.y).distance_to(center)
-			if d > max_r:
-				continue
-			if d < best_d:
-				best_d = d
-				best = t
+	for t in v.tiles.keys():
+		if world.get_terrain(t.x, t.y) != GodSimWorld.Terrain.MOUNTAIN:
+			continue
+		var d := world.tile_to_world(t.x, t.y).distance_to(center)
+		# Ties break toward the smallest x, then the smallest y, so
+		# the pick is the same every time.
+		if d < best_d or (is_equal_approx(d, best_d) and (t.x < best.x or (t.x == best.x and t.y < best.y))):
+			best_d = d
+			best = t
 	return best
 
 ## Hunger rises every tick; at max hunger, health drains. Returns true
@@ -742,23 +745,56 @@ func _pick_target(a: SimAgent) -> Vector2:
 			return world.tile_to_world(food.x, food.y)
 	var tile := world.world_to_tile(a.pos)
 	var has_home := false
+	var home_v: Villages.VillageData = null
 	var home_center := Vector2.ZERO
-	var home_radius := 0.0
 	if a.kind == SimAgent.Kind.PERSON and villages != null and a.village >= 0 and a.village < villages.villages.size():
-		var v: Villages.VillageData = villages.villages[a.village]
+		home_v = villages.villages[a.village]
 		has_home = true
-		home_center = world.tile_to_world(v.tile.x, v.tile.y)
-		home_radius = villages.territory_radius_px(v)
-		if a.pos.distance_to(home_center) > home_radius:
-			# Outside the border: walk home. A jittered point near the
-			# centre keeps citizens from all marching to one spot.
-			var back := home_center + Vector2(_rng.randf_range(-24, 24), _rng.randf_range(-24, 24))
-			var back_tile := world.world_to_tile(back)
-			if world.in_bounds(back_tile.x, back_tile.y):
-				var bt := world.get_terrain(back_tile.x, back_tile.y)
-				if bt != GodSimWorld.Terrain.WATER and bt != GodSimWorld.Terrain.MOUNTAIN:
-					return back
-			return home_center
+		home_center = world.tile_to_world(home_v.tile.x, home_v.tile.y)
+		# Phase 19 — exploration. A villager is not trapped inside the
+		# border: sometimes they walk out to explore the world beyond
+		# it, and they drift back when they are done. They keep their
+		# village while they are out — they are a citizen away from
+		# home, not a nomad.
+		if a.exploring:
+			# Back within a couple of tiles of the border: the trip is
+			# over — stop exploring and wander at home.
+			if villages.near_territory(home_v, tile, EXPLORE_RETURN_MARGIN):
+				a.exploring = false
+			else:
+				# Still out there: take a step back toward home — a
+				# few tiles, not a beeline to the centre, so the walk
+				# home wanders a little instead of marching straight.
+				var to_home := home_center - a.pos
+				var d := to_home.length()
+				if d > 0.0:
+					var step := to_home / d * (4.0 * GodSimWorld.TILE)
+					var dest := a.pos + step + Vector2(_rng.randf_range(-24, 24), _rng.randf_range(-24, 24))
+					var dt := world.world_to_tile(dest)
+					if world.in_bounds(dt.x, dt.y):
+						var tt := world.get_terrain(dt.x, dt.y)
+						if tt != GodSimWorld.Terrain.WATER and tt != GodSimWorld.Terrain.MOUNTAIN:
+							return dest
+					return home_center
+		elif _rng.randf() < EXPLORE_CHANCE:
+			# Set off exploring: pick a spot past the border, up to
+			# EXPLORE_RANGE_TILES out, on walkable land that is not
+			# already the village's own ground.
+			a.exploring = true
+			for attempt in 8:
+				var ang := _rng.randf() * TAU
+				var dist := _rng.randf_range(3.0, float(EXPLORE_RANGE_TILES)) * GodSimWorld.TILE
+				var dest := home_center + Vector2(cos(ang), sin(ang)) * dist
+				var dt := world.world_to_tile(dest)
+				if not world.in_bounds(dt.x, dt.y):
+					continue
+				var tt := world.get_terrain(dt.x, dt.y)
+				if tt == GodSimWorld.Terrain.WATER or tt == GodSimWorld.Terrain.MOUNTAIN:
+					continue
+				if villages.is_in_territory(home_v, dt):
+					continue
+				return dest
+			a.exploring = false
 	for attempt in 8:
 		var nx := tile.x + _rng.randi_range(-4, 4)
 		var ny := tile.y + _rng.randi_range(-4, 4)
@@ -770,7 +806,9 @@ func _pick_target(a: SimAgent) -> Vector2:
 		if a.kind == SimAgent.Kind.SHEEP and t == GodSimWorld.Terrain.FOREST:
 			continue
 		var dest := world.tile_to_world(nx, ny)
-		if has_home and dest.distance_to(home_center) > home_radius:
+		# A citizen at home wanders on their own land; leaving the
+		# border is what exploring is for (see above).
+		if has_home and not villages.is_in_territory(home_v, Vector2i(nx, ny)):
 			continue
 		return dest
 	return a.pos
@@ -783,34 +821,34 @@ func _pick_target(a: SimAgent) -> Vector2:
 ## Returns Vector2i(-1, -1) when no reachable food exists.
 func _nearest_food_tile(a: SimAgent) -> Vector2i:
 	var from := world.world_to_tile(a.pos)
-	var home_center := Vector2.ZERO
-	var home_limit := INF
+	var home_v: Villages.VillageData = null
 	if villages != null and a.village >= 0 and a.village < villages.villages.size():
-		var v: Villages.VillageData = villages.villages[a.village]
-		home_center = world.tile_to_world(v.tile.x, v.tile.y)
-		home_limit = villages.territory_radius_px(v) + FORAGE_MARGIN * GodSimWorld.TILE
+		home_v = villages.villages[a.village]
 	for r in range(1, FORAGE_RANGE + 1):
 		for dx in range(-r, r + 1):
 			for dy in [-r, r]:
 				var t := Vector2i(from.x + dx, from.y + dy)
-				if _is_food_tile(t, home_center, home_limit):
+				if _is_food_tile(t, home_v):
 					return t
 		for dy in range(-r + 1, r):
 			for dx in [-r, r]:
 				var t := Vector2i(from.x + dx, from.y + dy)
-				if _is_food_tile(t, home_center, home_limit):
+				if _is_food_tile(t, home_v):
 					return t
 	return Vector2i(-1, -1)
 
-func _is_food_tile(t: Vector2i, home_center: Vector2, home_limit: float) -> bool:
+func _is_food_tile(t: Vector2i, home_v: Villages.VillageData) -> bool:
 	if not world.in_bounds(t.x, t.y):
 		return false
 	if world.get_terrain(t.x, t.y) != GodSimWorld.Terrain.FOREST:
 		return false
 	if world.berries_at(t) <= 0:
 		return false
-	if home_limit < INF:
-		if world.tile_to_world(t.x, t.y).distance_to(home_center) > home_limit:
+	if home_v != null:
+		# Citizens may only forage on their own land, or within a
+		# small margin past the border — a village with no forest
+		# nearby starves, which is the point: land matters.
+		if not villages.near_territory(home_v, t, FORAGE_MARGIN):
 			return false
 	return true
 
