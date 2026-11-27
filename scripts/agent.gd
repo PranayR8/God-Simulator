@@ -164,7 +164,18 @@ const HERO_TRAIT_STRONG := 0
 const HERO_TRAIT_WISE := 1
 const HERO_TRAIT_SWIFT := 2
 const HERO_TRAIT_HARDY := 3
-const HERO_TRAIT_NAMES := ["Strong", "Wise", "Swift", "Hardy"]
+const HERO_TRAIT_BRAVE := 4
+const HERO_TRAIT_FERTILE := 5
+const HERO_TRAIT_HEALTHY := 6
+const HERO_TRAIT_NAMES := ["Strong", "Wise", "Swift", "Hardy", "Brave", "Fertile", "Healthy"]
+## Acquired traits (Phase 18) — earned in a life, never inherited. A
+## person can carry several: a Veteran who was crippled in the same
+## war, a Plague Survivor who later starved and lived.
+const ACQUIRED_VETERAN := 0
+const ACQUIRED_CRIPPLED := 1
+const ACQUIRED_PLAGUE_SURVIVOR := 2
+const ACQUIRED_FAMINE_SURVIVOR := 3
+const ACQUIRED_TRAIT_NAMES := ["Veteran", "Crippled", "Plague Survivor", "Famine Survivor"]
 const HERO_NAMES := [
 	"Mara", "Alden", "Bryn", "Cedric", "Delia", "Edmund", "Freya",
 	"Gareth", "Hilda", "Ivor", "Jessa", "Kael", "Lyra", "Magnus",
@@ -186,6 +197,13 @@ const HERO_SWIFT_SPEED_MULT := 1.25
 const HERO_SWIFT_BREED_MULT := 0.75
 const HERO_HARDY_REGEN_MULT := 2.0
 const HERO_HARDY_COLD_MULT := 0.5
+const HERO_BRAVE_MULT := 1.15       # a Brave leader's village fights 15% harder
+const HERO_FERTILE_BREED_MULT := 0.75  # a Fertile leader's village breeds 25% sooner
+const HERO_HEALTHY_REGEN_MULT := 2.0  # a Healthy leader's village recovers 2x as fast
+const ACQUIRED_VETERAN_WAR_MULT := 1.2  # a Veteran fights 20% harder
+const ACQUIRED_CRIPPLED_SPEED_MULT := 0.5  # a Crippled person walks half as fast
+const ACQUIRED_CRIPPLED_WAR_MULT := 0.5  # ...and fights at half strength
+const ACQUIRED_FAMINE_HUNGER_MULT := 0.75  # a Famine Survivor's hunger rises 25% slower
 var hero: bool = false
 var hero_name: String = ""
 var hero_deed: String = ""
@@ -206,6 +224,12 @@ const SURNAMES := [
 var innate_trait: int = -1
 var surname: String = ""
 var generation: int = 1
+## Phase 18 — acquired traits, earned in a life (never inherited).
+## was_starving remembers a brush with starvation: hunger reached 90
+## and the person lived to eat again, so they come back a Famine
+## Survivor.
+var acquired_traits: Array[int] = []
+var was_starving: bool = false
 const BLESS_SPEED_MULT := 1.5    # blessed people walk half again as fast
 const BLESS_REGEN_MULT := 3.0    # blessed people recover health 3x as fast
 const BLESS_LIFESPAN_MULT := 1.5 # blessed people live half again as long
@@ -237,7 +261,29 @@ func speed() -> float:
 		s = PERSON_SPEED
 	if blessed:
 		s *= BLESS_SPEED_MULT
+	# Phase 18 — a Crippled person walks half as fast, for life.
+	if has_acquired(ACQUIRED_CRIPPLED):
+		s *= ACQUIRED_CRIPPLED_SPEED_MULT
 	return s
+
+## Does this person carry an acquired trait?
+func has_acquired(trait_id: int) -> bool:
+	return acquired_traits.has(trait_id)
+
+## Earn an acquired trait (no duplicates). Returns true when it is new.
+func add_acquired(trait_id: int) -> bool:
+	if acquired_traits.has(trait_id):
+		return false
+	acquired_traits.append(trait_id)
+	return true
+
+## The acquired traits as a readable list ("Veteran, Crippled").
+func acquired_trait_names() -> String:
+	var names: Array[String] = []
+	for t in acquired_traits:
+		if t >= 0 and t < ACQUIRED_TRAIT_NAMES.size():
+			names.append(ACQUIRED_TRAIT_NAMES[t])
+	return ", ".join(names)
 
 ## "Mara the Swift" — the name the log and the player use for a hero.
 ## The trait is the person's own (inherited), not a fresh roll.

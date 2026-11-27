@@ -119,9 +119,10 @@ func update_stats(day: int, season_name: String, people: int, villages: int, ani
 	_villages_label.text = "Villages %d" % villages
 	_animals_label.text = "Animals %d" % animals
 
-## Phase 13 — the goal line: the current scenario (with live
-## progress) or, once it resolves, the next era's goal. The era name
-## rides along so the player always knows which age they are in.
+## Phase 13 — the goal line: the next achievement to chase (or the
+## next era, once all nine are unlocked). Phase 18 — no scenario, no
+## ending. The era name rides along so the player always knows which
+## age they are in.
 func update_goal(text: String, era_name: String) -> void:
 	_goal_label.text = "%s · %s Age" % [text, era_name]
 

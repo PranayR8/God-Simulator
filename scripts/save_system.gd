@@ -62,7 +62,7 @@ func _agents_to_data(agents: Agents) -> Array:
 		# are likewise stored for everyone (sheep keep 0, which they
 		# ignore) so a loaded world keeps its generations instead of
 		# resetting everyone to a newborn.
-		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job, "blessed": a.blessed, "sick": a.sick, "immune": a.immune, "at_war": a.at_war, "hero": a.hero, "hero_name": a.hero_name, "innate_trait": a.innate_trait, "hero_deed": a.hero_deed, "surname": a.surname, "generation": a.generation, "weapon_tier": a.weapon_tier, "armor_tier": a.armor_tier, "tool_tier": a.tool_tier})
+		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job, "blessed": a.blessed, "sick": a.sick, "immune": a.immune, "at_war": a.at_war, "hero": a.hero, "hero_name": a.hero_name, "innate_trait": a.innate_trait, "hero_deed": a.hero_deed, "surname": a.surname, "generation": a.generation, "weapon_tier": a.weapon_tier, "armor_tier": a.armor_tier, "tool_tier": a.tool_tier, "acquired_traits": a.acquired_traits, "was_starving": a.was_starving})
 	return out
 
 ## Berries as a flat list of [x, y, count] triples (only tiles that
@@ -88,9 +88,9 @@ func _villages_to_data(villages: Villages) -> Array:
 		out.append({"name": v.name, "x": v.tile.x, "y": v.tile.y, "day": v.founded_day, "color": v.color.to_html(), "food": v.food, "wood": v.wood, "stone": v.stone, "iron": v.iron, "marble": v.marble, "steel": v.steel, "extra_houses": v.extra_houses_built, "blessed_until": v.blessed_until_day, "last_war": v.last_war_day, "kingdom": v.kingdom})
 	return out
 
-## Goals as a Dictionary (era, winters, wars won, achievements, and
-## the scenario state). An absent goals node saves an empty dict, so
-## old callers without goals keep working.
+## Goals as a Dictionary (era, winters, wars won, achievements).
+## An absent goals node saves an empty dict, so old callers without
+## goals keep working.
 func _goals_to_data(goals: Goals) -> Dictionary:
 	if goals == null:
 		return {}
@@ -99,8 +99,6 @@ func _goals_to_data(goals: Goals) -> Dictionary:
 		"winters": goals.winters_survived,
 		"wars_won": goals.wars_won,
 		"achievements": goals.achievements,
-		"scenario_state": goals.scenario_state,
-		"scenario_reason": goals.scenario_reason,
 	}
 
 ## Rebuild the world from loaded data. Returns false if the data is empty
@@ -173,6 +171,11 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		na.weapon_tier = int(d.get("weapon_tier", 0))
 		na.armor_tier = int(d.get("armor_tier", 0))
 		na.tool_tier = int(d.get("tool_tier", 0))
+		# Phase 18 — acquired traits (old saves default to none).
+		na.acquired_traits = []
+		for t in d.get("acquired_traits", []):
+			na.acquired_traits.append(int(t))
+		na.was_starving = bool(d.get("was_starving", false))
 		na.surname = String(d.get("surname", ""))
 		if na.surname == "" and kind == SimAgent.Kind.PERSON:
 			na.surname = SimAgent.SURNAMES[randi() % SimAgent.SURNAMES.size()]
@@ -218,7 +221,7 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 	if wars != null:
 		wars.from_data(data.get("wars", []))
 	# Phase 13 — goals (old saves have none: they start in the Stone
-	# Age with no achievements and a fresh scenario).
+	# Age with no achievements).
 	# Phase 17 — kingdoms (old saves have none: they start empty
 	# and Towns found kingdoms on the next tick). Restored after the
 	# villages, so the kingdom members point at real villages.
@@ -230,8 +233,6 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		goals.winters_survived = int(gd.get("winters", 0))
 		goals.wars_won = int(gd.get("wars_won", 0))
 		goals.achievements = gd.get("achievements", {})
-		goals.scenario_state = int(gd.get("scenario_state", 0))
-		goals.scenario_reason = String(gd.get("scenario_reason", ""))
 	event_log.from_data(data.get("log", []))
 	world.queue_redraw()
 	agents.queue_redraw()

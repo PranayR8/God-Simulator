@@ -12,12 +12,12 @@ extends Node
 ## Achievements: a checklist of nine things to do. Each one unlocks
 ## once, the first time its condition is true, and the log names it.
 ##
-## Scenario: "Grow a village to 100 citizens before Day 100." The HUD
-## shows it from the start with live progress. Win when a village
-## reaches 100 by Day 100; lose when Day 100 passes without one, or
-## when everyone dies. The win/loss shows a banner; after it resolves
-## the player keeps playing in free play and the HUD shows the next
-## era's goal instead.
+## Phase 18 — there is no ending. The game is an endless god
+## simulator: the 100-day scenario (grow a village to 100 citizens
+## before Day 100, with a win/loss banner that paused the game) is
+## gone. The HUD's goal line now points at the next achievement to
+## chase, so there is always something to aim for and never a reason
+## to stop.
 ##
 ## Goals never touches the game directly — Main calls tick(day) every
 ## tick and connects the signals to the log and the banner.
@@ -29,8 +29,6 @@ extends Node
 ## advances because your people learned to use a new material, not
 ## because a counter ticked over.
 const ERA_NAMES := ["Stone", "Bronze", "Iron", "Classical", "Medieval"]
-const SCENARIO_TARGET_POP := 100
-const SCENARIO_DEADLINE_DAY := 100
 
 const ACHIEVEMENTS := [
 	{"id": "first_village", "name": "First Village", "desc": "Found your first village."},
@@ -46,15 +44,11 @@ const ACHIEVEMENTS := [
 
 signal era_changed(era_name: String)
 signal achievement_unlocked(achievement_id: String, achievement_name: String)
-signal scenario_won()
-signal scenario_lost(reason: String)
 
 var era: int = 0
 var winters_survived: int = 0
 var wars_won: int = 0
 var achievements: Dictionary = {}
-var scenario_state: int = 0  # 0 = active, 1 = won, 2 = lost
-var scenario_reason: String = ""
 
 var agents: Agents = null
 var villages: Villages = null
@@ -64,14 +58,12 @@ var _was_plague: bool = false
 var _had_people: bool = false
 
 ## Reset everything (a new world starts in the Stone Age with no
-## achievements and a fresh scenario).
+## achievements).
 func clear_all() -> void:
 	era = 0
 	winters_survived = 0
 	wars_won = 0
 	achievements = {}
-	scenario_state = 0
-	scenario_reason = ""
 	_last_season = -1
 	_was_plague = false
 	_had_people = false
@@ -94,7 +86,6 @@ func tick(day: int) -> void:
 		_had_people = true
 	_check_eras()
 	_check_achievements()
-	_check_scenario(day)
 
 func _check_eras() -> void:
 	# Each era unlocks when ANY village first stockpiles its resource.
@@ -171,25 +162,6 @@ func _unlock(achievement_id: String) -> void:
 func note_war_won(_winner_name: String) -> void:
 	wars_won += 1
 
-func _check_scenario(day: int) -> void:
-	if scenario_state != 0:
-		return
-	# Win: a village reaches 100 citizens by Day 100.
-	for v in villages.villages:
-		if villages.population_of(v) >= SCENARIO_TARGET_POP and day <= SCENARIO_DEADLINE_DAY:
-			scenario_state = 1
-			scenario_won.emit()
-			return
-	# Lose: the deadline passed, or everyone died.
-	if day > SCENARIO_DEADLINE_DAY:
-		scenario_state = 2
-		scenario_reason = "The 100th day passed without a village of 100."
-		scenario_lost.emit(scenario_reason)
-	elif _had_people and agents.count_people() == 0:
-		scenario_state = 2
-		scenario_reason = "Everyone died."
-		scenario_lost.emit(scenario_reason)
-
 ## The current era's name (for the HUD's goal line).
 func era_name() -> String:
 	return ERA_NAMES[clampi(era, 0, ERA_NAMES.size() - 1)]
@@ -201,19 +173,21 @@ func largest_village_pop() -> int:
 		best = maxi(best, villages.population_of(v))
 	return best
 
-## The goal line for the HUD. While the scenario is live it shows the
-## scenario with live progress; after it resolves it shows the next
-## era's goal, so there is always something to aim for.
-func goal_text(day: int) -> String:
-	if scenario_state == 0:
-		return "Goal: Grow a village to 100 citizens — %d/100 · Day %d/100" % [largest_village_pop(), day]
-	if scenario_state == 1:
-		return "Victory! A village reached 100 citizens. " + next_era_text()
-	if scenario_state == 2:
-		return "Defeat — %s %s" % [scenario_reason, next_era_text()]
-	return ""
+## The goal line for the HUD. There is no ending, so it points at
+## the next achievement to chase (with how many are done), and once
+## all nine are unlocked it points at the next era instead.
+func goal_text() -> String:
+	var done := 0
+	for def in ACHIEVEMENTS:
+		if bool(achievements.get(String(def.get("id", "")), false)):
+			done += 1
+	for def in ACHIEVEMENTS:
+		if not bool(achievements.get(String(def.get("id", "")), false)):
+			return "Next: %s · %d/9 achievements" % [String(def.get("name", "")), done]
+	return next_era_text()
 
-## What the next era needs (shown once the scenario resolves).
+## What the next era needs (shown once all nine achievements are
+## unlocked).
 func next_era_text() -> String:
 	match era:
 		0:

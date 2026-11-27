@@ -81,8 +81,7 @@ func _ready() -> void:
 	goals.villages = villages
 	goals.era_changed.connect(_on_era_changed)
 	goals.achievement_unlocked.connect(_on_achievement_unlocked)
-	goals.scenario_won.connect(_on_scenario_won)
-	goals.scenario_lost.connect(_on_scenario_lost)
+
 	wars.war_ended.connect(goals.note_war_won)
 	# History: villages and births report through signals; Main stamps
 	# the day and writes them into the log, and the HUD redraws.
@@ -91,6 +90,7 @@ func _ready() -> void:
 	agents.hero_made.connect(_on_hero_made)
 	agents.hero_died.connect(_on_hero_died)
 	agents.starved.connect(_on_starved)
+	agents.famine_survivor.connect(_on_famine_survivor)
 	agents.old_age_died.connect(_on_old_age_died)
 	agents.cold_died.connect(_on_cold_died)
 	agents.plague_died.connect(_on_plague_died)
@@ -175,7 +175,7 @@ func _do_tick() -> void:
 	villages.tick(day)
 	wars.tick(day)  # raids, marches, battles, and their outcomes
 	kingdoms.tick(day)  # kingdoms: founding, kings, diplomacy, rebellion
-	goals.tick(day)  # eras, achievements, and the scenario
+	goals.tick(day)  # eras and achievements (no ending — endless)
 	villages.era = goals.era  # Phase 15 — the houses redraw in the era's style
 	agents.era = goals.era  # Phase 16 — new adults are equipped in the era's material
 	if total_ticks % 40 == 0:
@@ -186,7 +186,7 @@ func _update_hud() -> void:
 	hud.update_stats(day, GodSimWorld.season_name_for_day(day), agents.count_people(), villages.count(), agents.count_animals())
 	hud.update_cooldowns(powers.cooldowns)
 	hud.update_disaster_button(disasters.trigger_cooldown_remaining() > 0)
-	hud.update_goal(goals.goal_text(day), goals.era_name())
+	hud.update_goal(goals.goal_text(), goals.era_name())
 
 ## What the log says when a season arrives.
 func _season_arrival_text(season: int) -> String:
@@ -436,6 +436,10 @@ func _inspect_text(a: SimAgent) -> String:
 	lines.append("Age: %d days · Health: %d · Hunger: %d" % [age_days, int(a.health), int(a.hunger)])
 	lines.append("Job: %s · Village: %s" % [job_name, home if home != "" else "None"])
 	lines.append("Trait: %s" % SimAgent.HERO_TRAIT_NAMES[a.innate_trait])
+	# Phase 18 — the traits a life earned: Veteran, Crippled, and the
+	# rest. A person with none has lived a quiet life so far.
+	var acquired := a.acquired_trait_names()
+	lines.append("Acquired: %s" % (acquired if acquired != "" else "None yet"))
 	lines.append("")
 	lines.append("Items")
 	lines.append("Weapon: %s" % a.weapon_name())
@@ -533,24 +537,20 @@ func _on_banner_dismissed() -> void:
 	paused = false
 	hud.set_paused(false)
 
-## Phase 13 — the scenario was won: log it, show the victory banner,
-## and pause so the moment lands.
-func _on_scenario_won() -> void:
-	event_log.add(day, "Victory! A village reached 100 citizens before Day 100.")
-	paused = true
-	hud.set_paused(true)
-	hud.show_banner("Victory!", "A village reached 100 citizens before Day 100. The scenario is won — keep playing in free play, or start a new world for another run.")
-
-## Phase 13 — the scenario was lost: log it, show the defeat banner,
-## and pause so the moment lands.
-func _on_scenario_lost(reason: String) -> void:
-	event_log.add(day, "Defeat — %s" % reason)
-	paused = true
-	hud.set_paused(true)
-	hud.show_banner("Defeat", "%s The scenario is over — keep playing in free play, or start a new world for another run." % reason)
-
 func _on_child_born(village_name: String) -> void:
 	event_log.add_birth(day, village_name)
+
+## Phase 18 — a person survived starvation and earned the Famine
+## Survivor trait: their hunger will rise slower from now on.
+func _on_famine_survivor(a: SimAgent) -> void:
+	var who := a.hero_title() if a.hero else "A villager"
+	var home := ""
+	if a.village >= 0 and a.village < villages.villages.size():
+		home = villages.villages[a.village].name
+	if home != "":
+		event_log.add(day, "%s of %s survived starvation — a Famine Survivor." % [who, home])
+	else:
+		event_log.add(day, "%s survived starvation — a Famine Survivor." % who)
 
 ## Phase 12 — a house reached a new generation: "House of Mara, 3rd
 ## generation". The ordinal reads like a lineage, not a number.

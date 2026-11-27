@@ -104,6 +104,9 @@ signal old_age_died(village_name: String)
 ## of Wilwick"). hero_died: a hero died — Main logs it by name, so
 ## losing a hero reads as a loss, not just a number. village_name is
 ## "" for a nomad hero.
+## Phase 18 — a person survived starvation and earned the Famine
+## Survivor trait. Main logs it so the story is visible.
+signal famine_survivor(agent: SimAgent)
 signal hero_made(hero_title: String, village_name: String, deed: String)
 signal hero_died(hero_title: String, village_name: String)
 
@@ -312,11 +315,24 @@ func _equip_from_era(a: SimAgent) -> void:
 ## The fighting strength of a list of fighters: each one counts for
 ## their weapon's edge (a steel sword is worth half again a stone
 ## club). Used for both sides of a war.
+## One fighter's war strength: their weapon's edge, times what they
+## are. A Brave person hits 15% harder, a Veteran 20% harder, and a
+## Crippled person fights at half strength.
+func fighter_strength(a: SimAgent) -> float:
+	var mult: float = SimAgent.GEAR_WEAPON_MULT[clampi(a.weapon_tier, 0, SimAgent.GEAR_WEAPON_MULT.size() - 1)]
+	if a.innate_trait == SimAgent.HERO_TRAIT_BRAVE:
+		mult *= SimAgent.HERO_BRAVE_MULT
+	if a.has_acquired(SimAgent.ACQUIRED_VETERAN):
+		mult *= SimAgent.ACQUIRED_VETERAN_WAR_MULT
+	if a.has_acquired(SimAgent.ACQUIRED_CRIPPLED):
+		mult *= SimAgent.ACQUIRED_CRIPPLED_WAR_MULT
+	return mult
+
 func weapon_force(fighters: Array) -> float:
 	var force := 0.0
 	for f in fighters:
 		var a: SimAgent = f
-		force += SimAgent.GEAR_WEAPON_MULT[clampi(a.weapon_tier, 0, SimAgent.GEAR_WEAPON_MULT.size() - 1)]
+		force += fighter_strength(a)
 	return force
 
 ## The average armour protection of a list of fighters (the share of
@@ -491,7 +507,19 @@ func _nearest_mountain_tile(v: Villages.VillageData, max_r: float) -> Vector2i:
 ## Hunger rises every tick; at max hunger, health drains. Returns true
 ## if the person starved to death (and removes them from the list).
 func _update_hunger(a: SimAgent) -> bool:
-	a.hunger = minf(HUNGER_MAX, a.hunger + HUNGER_PER_TICK)
+	# Phase 18 — a Famine Survivor's hunger rises 25% slower.
+	var hunger_gain := HUNGER_PER_TICK
+	if a.has_acquired(SimAgent.ACQUIRED_FAMINE_SURVIVOR):
+		hunger_gain *= SimAgent.ACQUIRED_FAMINE_HUNGER_MULT
+	a.hunger = minf(HUNGER_MAX, a.hunger + hunger_gain)
+	# Phase 18 — a brush with starvation (hunger 90+) that the person
+	# lives through earns the Famine Survivor trait when they eat again.
+	if a.hunger >= 90.0:
+		a.was_starving = true
+	elif a.was_starving and a.hunger < 50.0:
+		a.was_starving = false
+		if a.add_acquired(SimAgent.ACQUIRED_FAMINE_SURVIVOR):
+			famine_survivor.emit(a)
 	if a.hunger >= HUNGER_MAX:
 		a.health -= STARVE_DRAIN_PER_TICK
 		if a.health <= 0.0:
@@ -513,6 +541,10 @@ func _update_hunger(a: SimAgent) -> bool:
 			# Phase 11 — a Hardy leader's people recover twice as fast.
 			if _leader_trait_for(a) == SimAgent.HERO_TRAIT_HARDY:
 				regen *= SimAgent.HERO_HARDY_REGEN_MULT
+			# Phase 18 — a Healthy person recovers twice as fast, and
+			# so does a Healthy leader's whole village.
+			if a.innate_trait == SimAgent.HERO_TRAIT_HEALTHY or _leader_trait_for(a) == SimAgent.HERO_TRAIT_HEALTHY:
+				regen *= SimAgent.HERO_HEALTHY_REGEN_MULT
 			a.health = minf(HEALTH_MAX, a.health + regen)
 	return false
 
@@ -553,7 +585,9 @@ func _update_plague(a: SimAgent) -> bool:
 			return true
 		return false
 	# The sickness ran its course — recovered, and immune for life.
+	# Phase 18 — surviving a plague earns the Plague Survivor trait.
 	a.immune = true
+	a.add_acquired(SimAgent.ACQUIRED_PLAGUE_SURVIVOR)
 	# Phase 11 — surviving a plague can make a hero, but a village
 	# remembers only one plague survivor, so a plague does not mint
 	# a dozen heroes at once.
@@ -851,7 +885,9 @@ func _try_breed() -> void:	# A creature breeds when it stands next to another of
 				_note_birth_house(child)
 			agents.append(child)
 			# Phase 11 — a Swift leader's people breed 25% sooner.
-			if _leader_trait_for(a) == SimAgent.HERO_TRAIT_SWIFT:
+			# Phase 18 — a Fertile person breeds 25% sooner too, and
+			# so does a Fertile leader's whole village.
+			if _leader_trait_for(a) == SimAgent.HERO_TRAIT_SWIFT or a.innate_trait == SimAgent.HERO_TRAIT_FERTILE or _leader_trait_for(a) == SimAgent.HERO_TRAIT_FERTILE:
 				a.breed_cooldown = BREED_TIME * SimAgent.HERO_SWIFT_BREED_MULT
 			else:
 				a.breed_cooldown = BREED_TIME

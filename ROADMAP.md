@@ -532,6 +532,68 @@ logged.
   uses it) — the first version added a duplicate and the whole
   project failed to parse; the Inspect tap reuses the existing one.
 
+### Phase 17 — Kingdoms & diplomacy
+
+- **Player feels:** the villages are not alone any more — they
+  gather into kingdoms with kings, and the kingdoms fight, make
+  peace, ally and fall apart.
+- **Build:** a village that grows into a Town founds a kingdom (or
+  joins a nearby one) — the kingdom has a name (after its capital),
+  a colour, a capital and its member villages. Its king is the
+  capital's oldest hero (or its oldest adult when the capital has no
+  hero), and the king's trait boosts every village in the kingdom,
+  not just the capital — a Strong king makes the whole kingdom fight
+  harder. A king's death is a succession: the next-oldest hero is
+  crowned in the History. Kingdoms have relations: a raid between
+  two kingdoms sets them at war (and while they are at war, raids
+  fly between their villages); 10 quiet days make peace; two
+  neighbouring kingdoms at peace for 20 days form an alliance, and
+  allies are never raided. A member village that starves for 3 days
+  rebels — it leaves, and (barred from rejoining for 30 days) founds
+  its own kingdom instead. A kingdom whose capital empties hands the
+  crown to its largest member; a kingdom with no living village falls.
+  You can read the politics off the map: a kingdom's villages wear
+  its colour on their borders, a member village's label names its
+  kingdom, and the capital wears a small gold crown.
+- **Done when:** two Towns near each other gather into one kingdom
+  with a crowned capital, and a war between two kingdoms is fought
+  by their villages, not just the two that started it.
+- **Test:** formation, the king and the succession, war/peace/
+  alliance, rebellion, the fall, and a save round-trip.
+
+- **Status (done Nov 27, 2026):** kingdoms form when a Town stands
+  alone (founds) or near an existing kingdom (joins, within 25
+  tiles); the king is the capital's oldest hero (else its oldest
+  adult), and the king's trait boosts the whole kingdom (the village
+  leader's boost is replaced by the king's while the village is in a
+  kingdom). Relations are war/peace/allied per pair: a raid sets war,
+  10 raid-free days make peace, 20 peaceful days between neighbours
+  make an alliance; raids never target the same kingdom or an ally,
+  and prefer a kingdom already at war. A member that starves 3 days
+  rebels and founds its own kingdom (30-day rejoin cooldown). An
+  emptied capital passes to the largest member; a kingdom with no
+  living village falls. Borders wear the kingdom colour, member
+  labels name the kingdom, the capital wears a gold crown, and the
+  History logs founding, joining, coronations, wars, peaces,
+  alliances, rebellions, new capitals and falls. Kingdoms are saved
+  (still v5). Verified by a deterministic headless test (formation:
+  2 kingdoms from 4 Towns, 3 + 1 members; the king is the capital's
+  oldest hero and a member village carries the Strong trait; killing
+  the king crowns the next hero; war then peace on day 14 then an
+  alliance on day 34, and no raid on an ally; a starving member
+  rebels and founds its own kingdom; an emptied capital passes to
+  Bramwick and the kingdom falls when it empties too; kingdoms
+  round-trip a save) and a live browser playthrough (Day 5, Wilwick
+  · City · 77: "Wilwick founded the Kingdom of Wilwick" in the
+  History on Day 1, the territory border in the kingdom's purple,
+  the gold crown on the capital, zero errors). Two things the test
+  caught: (1) villages start with an empty food store, so every
+  member starved and rebelled within three ticks — the test gives
+  each village a full store, and only the one it wants to rebel goes
+  hungry. (2) The peace/alliance clock counts from the raid's day,
+  not from day 1 — the test stamps the raid on day 4, so peace lands
+  on day 14 and the alliance on day 34.
+
 ---
 
 ## Explicitly out of scope (for now)

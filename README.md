@@ -151,6 +151,16 @@ into a real mobile app.
   and trait; their weapon, armour and tool; and their heritage, the
   house they belong to and the generation they are — with a white
   ring marking who you picked.
+- **Kingdoms & diplomacy**: a village that grows into a Town founds
+  a kingdom — or joins a nearby one. The kingdom has a name, a
+  colour, a capital wearing a gold crown, and a king: the capital's
+  oldest hero, whose trait boosts every village in the kingdom. A
+  king's death is a succession. Kingdoms fight, make peace after 10
+  quiet days, and ally after 20 peaceful days as neighbours — and
+  allies are never raided. A village that starves rebels and founds
+  its own kingdom; a kingdom with no living village falls. You can
+  read it off the map: a kingdom's villages wear its colour on
+  their borders, and a member village's label names its kingdom.
   Their deeds go in the History ("Perrin the Swift became a hero of
   Wilwick — founder of Wilwick"), and when a hero dies they are named
   too ("Finn the Swift of Wilwick has died") — losing a hero costs the

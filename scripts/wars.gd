@@ -277,6 +277,11 @@ func _resolve_war(wi: int) -> void:
 		attacker_force *= SimAgent.HERO_STRONG_MULT
 	if def_trait == SimAgent.HERO_TRAIT_STRONG:
 		defender_force *= SimAgent.HERO_STRONG_MULT
+	# Phase 18 — a Brave leader's village fights 15% harder.
+	if atk_trait == SimAgent.HERO_TRAIT_BRAVE:
+		attacker_force *= SimAgent.HERO_BRAVE_MULT
+	if def_trait == SimAgent.HERO_TRAIT_BRAVE:
+		defender_force *= SimAgent.HERO_BRAVE_MULT
 	var attacker_wins := attacker_force > defender_force
 	# The spoils: the winner takes half the loser's food, up to a cap.
 	var loser: Villages.VillageData = defender if attacker_wins else attacker
@@ -302,6 +307,10 @@ func _resolve_war(wi: int) -> void:
 			event_log.add(current_day, "%s held %s against %s's raid." % [leader.hero_title(), defender.name, attacker.name])
 	# Phase 13 — a war ended with a winner; Goals counts it.
 	war_ended.emit(winner.name)
+	# Phase 18 — every survivor of the battle is a Veteran now,
+	# and some come home Crippled: a fifth of the losing side's
+	# survivors, a tenth of the winning side's.
+	_mark_veterans_and_wounded(war_id, di, attacker_wins)
 	# Phase 11 — the oldest raider who came home alive becomes a hero:
 	# surviving a war is the kind of thing a village remembers.
 	var survivors := _party_for(war_id)
@@ -314,6 +323,35 @@ func _resolve_war(wi: int) -> void:
 	if oldest != null:
 		agents.make_hero(oldest, "survived the war against " + defender.name)
 	_end_war(wi)
+
+## Phase 18 — after a battle, the living are Veterans, and some are
+## Crippled. The losing side's survivors are crippled more often (a
+## fifth) than the winning side's (a tenth). A Crippled Veteran walks
+## half as fast and fights at half strength, for life.
+func _mark_veterans_and_wounded(war_id: int, defender_idx: int, attacker_wins: bool) -> void:
+	# Every survivor is a Veteran; the trait is silent for ordinary
+	# villagers (the log names only heroes, so a big battle does not
+	# flood the History). A fifth of the losing side's survivors and
+	# a tenth of the winning side's come home Crippled.
+	var raider_cripple_chance := 0.1 if attacker_wins else 0.2
+	var crippled_count := 0
+	for a in _party_for(war_id):
+		var r: SimAgent = a
+		r.add_acquired(SimAgent.ACQUIRED_VETERAN)
+		if randf() < raider_cripple_chance and r.add_acquired(SimAgent.ACQUIRED_CRIPPLED):
+			crippled_count += 1
+			if r.hero:
+				event_log.add(current_day, "%s was crippled in the war." % r.hero_title())
+	var defender_cripple_chance := 0.2 if attacker_wins else 0.1
+	for a in agents.agents:
+		if a.kind == SimAgent.Kind.PERSON and a.village == defender_idx and not a.is_child() and a.at_war < 0:
+			var d: SimAgent = a
+			d.add_acquired(SimAgent.ACQUIRED_VETERAN)
+			if randf() < defender_cripple_chance and d.add_acquired(SimAgent.ACQUIRED_CRIPPLED):
+				crippled_count += 1
+				if d.hero:
+					event_log.add(current_day, "%s was crippled in the war." % d.hero_title())
+	event_log.add(current_day, "The war's survivors are Veterans now; %d came home crippled." % crippled_count)
 
 ## Kill up to count raiders of this war (the fallen are counted to
 ## their home village — the attacker's — and logged).
