@@ -19,6 +19,11 @@ extends Node2D
 ## After a war both villages need 10 days to recover before the next
 ## one, so war is an event, not a permanent state.
 ##
+## Phase 13 — a war ended with a winner (winner_name is the winning
+## village). Goals counts it: winning a war is an achievement and one
+## half of the Classical era's requirement.
+signal war_ended(winner_name: String)
+##
 ## Wars are saved (still v5): the active wars, each raider's war mark,
 ## and each village's last-war day all round-trip, so a war in progress
 ## survives a save/load. A war is found by its id (not its place in
@@ -261,6 +266,8 @@ func _resolve_war(wi: int) -> void:
 		event_log.add(current_day, "%s repelled %s's raid — the raiders were driven off!" % [defender.name, attacker.name])
 		if leader != null and agents.agents.has(leader):
 			event_log.add(current_day, "%s held %s against %s's raid." % [leader.hero_title(), defender.name, attacker.name])
+	# Phase 13 — a war ended with a winner; Goals counts it.
+	war_ended.emit(winner.name)
 	# Phase 11 — the oldest raider who came home alive becomes a hero:
 	# surviving a war is the kind of thing a village remembers.
 	var survivors := _party_for(war_id)

@@ -16,6 +16,7 @@ signal new_world_pressed
 signal zoom_in_pressed
 signal zoom_out_pressed
 signal zoom_fit_pressed
+signal banner_dismissed
 
 # Tool ids — Main matches on these strings.
 const TOOL_PAINT_GRASS := "paint_grass"
@@ -48,6 +49,10 @@ var brush_wide: bool = false
 @onready var _log_latest: Label = $LogPanel/Margin/VBox/LogLatest
 @onready var _log_scroll: ScrollContainer = $LogPanel/Margin/VBox/LogScroll
 @onready var _log_entries: Label = $LogPanel/Margin/VBox/LogScroll/LogEntries
+@onready var _goal_label: Label = $GoalPanel/Margin/GoalLabel
+@onready var _banner_panel: PanelContainer = $BannerPanel
+@onready var _banner_title: Label = $BannerPanel/Margin/VBox/BannerTitle
+@onready var _banner_message: Label = $BannerPanel/Margin/VBox/BannerMessage
 
 ## The history panel sits top-left, below the stats bar. Collapsed it
 ## shows just the latest event; expanded it scrolls the whole log.
@@ -95,6 +100,7 @@ func _ready() -> void:
 	$ZoomBox/ZoomOutButton.pressed.connect(func() -> void: zoom_out_pressed.emit())
 	$ZoomBox/ZoomFitButton.pressed.connect(func() -> void: zoom_fit_pressed.emit())
 	_log_toggle.pressed.connect(_on_log_toggle_pressed)
+	$BannerPanel/Margin/VBox/BannerButton.pressed.connect(_on_banner_button_pressed)
 	_select_tool(TOOL_PAINT_GRASS)
 
 func update_stats(day: int, season_name: String, people: int, villages: int, animals: int) -> void:
@@ -103,6 +109,26 @@ func update_stats(day: int, season_name: String, people: int, villages: int, ani
 	_people_label.text = "People %d" % people
 	_villages_label.text = "Villages %d" % villages
 	_animals_label.text = "Animals %d" % animals
+
+## Phase 13 — the goal line: the current scenario (with live
+## progress) or, once it resolves, the next era's goal. The era name
+## rides along so the player always knows which age they are in.
+func update_goal(text: String, era_name: String) -> void:
+	_goal_label.text = "%s · %s Age" % [text, era_name]
+
+## Phase 13 — show the victory/defeat banner (the game pauses while
+## it is up; Continue dismisses it and play resumes).
+func show_banner(title: String, message: String) -> void:
+	_banner_title.text = title
+	_banner_message.text = message
+	_banner_panel.visible = true
+
+func hide_banner() -> void:
+	_banner_panel.visible = false
+
+func _on_banner_button_pressed() -> void:
+	hide_banner()
+	banner_dismissed.emit()
 
 func set_paused(is_paused: bool) -> void:
 	_pause_button.text = "Play" if is_paused else "Pause"

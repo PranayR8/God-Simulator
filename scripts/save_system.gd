@@ -13,7 +13,7 @@ const SAVE_PATH := "user://world.json"
 func save_exists() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)
 
-func save_game(world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog, day: int, ticks: int, wars: Wars = null) -> bool:
+func save_game(world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog, day: int, ticks: int, wars: Wars = null, goals: Goals = null) -> bool:
 	var data := {
 		"version": 5,
 		"seed": world.seed_value,
@@ -26,6 +26,7 @@ func save_game(world: GodSimWorld, agents: Agents, villages: Villages, event_log
 		"burning": _burning_to_data(world),
 		"villages": _villages_to_data(villages),
 		"wars": wars.to_data() if wars != null else [],
+		"goals": _goals_to_data(goals),
 		"log": event_log.to_data(),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -86,11 +87,26 @@ func _villages_to_data(villages: Villages) -> Array:
 		out.append({"name": v.name, "x": v.tile.x, "y": v.tile.y, "day": v.founded_day, "color": v.color.to_html(), "food": v.food, "wood": v.wood, "extra_houses": v.extra_houses_built, "blessed_until": v.blessed_until_day, "last_war": v.last_war_day})
 	return out
 
+## Goals as a Dictionary (era, winters, wars won, achievements, and
+## the scenario state). An absent goals node saves an empty dict, so
+## old callers without goals keep working.
+func _goals_to_data(goals: Goals) -> Dictionary:
+	if goals == null:
+		return {}
+	return {
+		"era": goals.era,
+		"winters": goals.winters_survived,
+		"wars_won": goals.wars_won,
+		"achievements": goals.achievements,
+		"scenario_state": goals.scenario_state,
+		"scenario_reason": goals.scenario_reason,
+	}
+
 ## Rebuild the world from loaded data. Returns false if the data is empty
 ## or unusable (caller should generate a fresh world instead).
 ## Old saves have no "log" key — the history just starts empty — and
 ## no "berries" key — forests restock to full (see rebuild_berries).
-func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog, wars: Wars = null) -> bool:
+func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog, wars: Wars = null, goals: Goals = null) -> bool:
 	if data.is_empty():
 		return false
 	world.seed_value = int(data.get("seed", 0))
@@ -190,6 +206,16 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 	# a Wars node (older tests) — those worlds simply have no wars.
 	if wars != null:
 		wars.from_data(data.get("wars", []))
+	# Phase 13 — goals (old saves have none: they start in the Stone
+	# Age with no achievements and a fresh scenario).
+	if goals != null:
+		var gd: Dictionary = data.get("goals", {})
+		goals.era = int(gd.get("era", 0))
+		goals.winters_survived = int(gd.get("winters", 0))
+		goals.wars_won = int(gd.get("wars_won", 0))
+		goals.achievements = gd.get("achievements", {})
+		goals.scenario_state = int(gd.get("scenario_state", 0))
+		goals.scenario_reason = String(gd.get("scenario_reason", ""))
 	event_log.from_data(data.get("log", []))
 	world.queue_redraw()
 	agents.queue_redraw()

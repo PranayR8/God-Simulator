@@ -48,6 +48,7 @@ var _last_paint_tile := Vector2i(-1, -1)
 @onready var powers: Powers = $Powers
 @onready var disasters: Disasters = $Disasters
 @onready var wars: Wars = $Wars
+@onready var goals: Goals = $Goals
 @onready var save_system: SaveSystem = $SaveSystem
 @onready var camera: Camera2D = $Camera2D
 @onready var hud: Hud = $HUD
@@ -69,6 +70,13 @@ func _ready() -> void:
 	wars.agents = agents
 	wars.villages = villages
 	wars.event_log = event_log
+	goals.agents = agents
+	goals.villages = villages
+	goals.era_changed.connect(_on_era_changed)
+	goals.achievement_unlocked.connect(_on_achievement_unlocked)
+	goals.scenario_won.connect(_on_scenario_won)
+	goals.scenario_lost.connect(_on_scenario_lost)
+	wars.war_ended.connect(goals.note_war_won)
 	# History: villages and births report through signals; Main stamps
 	# the day and writes them into the log, and the HUD redraws.
 	agents.child_born.connect(_on_child_born)
@@ -90,12 +98,13 @@ func _ready() -> void:
 	hud.speed_pressed.connect(_on_speed_pressed)
 	hud.save_pressed.connect(_on_save_pressed)
 	hud.new_world_pressed.connect(_on_new_world_pressed)
+	hud.banner_dismissed.connect(_on_banner_dismissed)
 	hud.zoom_in_pressed.connect(func() -> void: _zoom_by(1.25))
 	hud.zoom_out_pressed.connect(func() -> void: _zoom_by(0.8))
 	hud.zoom_fit_pressed.connect(_fit_camera)
 	if save_system.save_exists():
 		var data := save_system.load_game()
-		if save_system.apply_save(data, world, agents, villages, event_log, wars):
+		if save_system.apply_save(data, world, agents, villages, event_log, wars, goals):
 			day = int(data.get("day", 1))
 			total_ticks = int(data.get("ticks", 0))
 			hud.set_hint("World loaded — welcome back!")
@@ -112,6 +121,7 @@ func _new_world() -> void:
 	agents.clear_all()
 	villages.clear_all()
 	wars.clear_all()
+	goals.clear_all()
 	day = 1
 	total_ticks = 0
 	event_log.clear()
@@ -124,7 +134,7 @@ func _new_world() -> void:
 	hud.set_hint("New world! Paint terrain, then spawn people.")
 
 func _save_quietly() -> void:
-	save_system.save_game(world, agents, villages, event_log, day, total_ticks, wars)
+	save_system.save_game(world, agents, villages, event_log, day, total_ticks, wars, goals)
 
 
 # --- simulation ------------------------------------------------------------
@@ -156,6 +166,7 @@ func _do_tick() -> void:
 	agents.tick(TICK_INTERVAL, season, day)
 	villages.tick(day)
 	wars.tick(day)  # raids, marches, battles, and their outcomes
+	goals.tick(day)  # eras, achievements, and the scenario
 	if total_ticks % 40 == 0:
 		_save_quietly()  # autosave every 40 ticks (~10s at 1x)
 	_update_hud()
@@ -164,6 +175,7 @@ func _update_hud() -> void:
 	hud.update_stats(day, GodSimWorld.season_name_for_day(day), agents.count_people(), villages.count(), agents.count_animals())
 	hud.update_cooldowns(powers.cooldowns)
 	hud.update_disaster_button(disasters.trigger_cooldown_remaining() > 0)
+	hud.update_goal(goals.goal_text(day), goals.era_name())
 
 ## What the log says when a season arrives.
 func _season_arrival_text(season: int) -> String:
@@ -433,6 +445,36 @@ func _log_power(tool: String, killed: int) -> void:
 			else:
 				event_log.add(day, "A meteor crashed down, leaving a crater")
 
+## Phase 13 — an era unlocked: the log announces it, so the player
+## gets a clear "you did it" moment.
+func _on_era_changed(era_name: String) -> void:
+	event_log.add(day, "Your people have entered the %s Age!" % era_name)
+
+## Phase 13 — an achievement unlocked: named in the log.
+func _on_achievement_unlocked(_achievement_id: String, achievement_name: String) -> void:
+	event_log.add(day, "Achievement: %s!" % achievement_name)
+
+## Phase 13 — the banner was dismissed: play resumes.
+func _on_banner_dismissed() -> void:
+	paused = false
+	hud.set_paused(false)
+
+## Phase 13 — the scenario was won: log it, show the victory banner,
+## and pause so the moment lands.
+func _on_scenario_won() -> void:
+	event_log.add(day, "Victory! A village reached 100 citizens before Day 100.")
+	paused = true
+	hud.set_paused(true)
+	hud.show_banner("Victory!", "A village reached 100 citizens before Day 100. The scenario is won — keep playing in free play, or start a new world for another run.")
+
+## Phase 13 — the scenario was lost: log it, show the defeat banner,
+## and pause so the moment lands.
+func _on_scenario_lost(reason: String) -> void:
+	event_log.add(day, "Defeat — %s" % reason)
+	paused = true
+	hud.set_paused(true)
+	hud.show_banner("Defeat", "%s The scenario is over — keep playing in free play, or start a new world for another run." % reason)
+
 func _on_child_born(village_name: String) -> void:
 	event_log.add_birth(day, village_name)
 
@@ -578,7 +620,7 @@ func _on_speed_pressed() -> void:
 	hud.set_speed(SPEEDS[speed_index])
 
 func _on_save_pressed() -> void:
-	if save_system.save_game(world, agents, villages, event_log, day, total_ticks, wars):
+	if save_system.save_game(world, agents, villages, event_log, day, total_ticks, wars, goals):
 		hud.set_hint("World saved.")
 	else:
 		hud.set_hint("Save failed!")

@@ -122,6 +122,15 @@ into a real mobile app.
   "House of Mara, 3rd generation". A village founded by a Strong
   bloodline is led by a Strong hero and fights harder; one founded by
   a Wise bloodline is led by a Wise hero and feeds better.
+- **Goals, eras & achievements**: there is something to aim for now.
+  The HUD shows the current goal from the start — "Grow a village to
+  100 citizens before Day 100" — with live progress. Your people move
+  through eras (Stone → Bronze → Iron → Classical) as they hit
+  milestones: a first City, 100 citizens, surviving 10 winters and
+  winning a war. Nine achievements mark the way ("First Village",
+  "Raise a City", "Save a Village", "Third Generation"...). Win the
+  scenario and a victory banner lands; let everyone die, or the 100th
+  day pass, and it is defeat — then you keep playing in free play.
   Their deeds go in the History ("Perrin the Swift became a hero of
   Wilwick — founder of Wilwick"), and when a hero dies they are named
   too ("Finn the Swift of Wilwick has died") — losing a hero costs the
