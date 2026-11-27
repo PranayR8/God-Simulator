@@ -122,13 +122,19 @@ into a real mobile app.
   "House of Mara, 3rd generation". A village founded by a Strong
   bloodline is led by a Strong hero and fights harder; one founded by
   a Wise bloodline is led by a Wise hero and feeds better.
-- **Goals, eras & achievements**: there is something to aim for now.
-  The HUD shows the current goal from the start — "Grow a village to
-  100 citizens before Day 100" — with live progress. Nine achievements
-  mark the way ("First Village", "Raise a City", "Save a Village",
-  "Third Generation"...). Win the scenario and a victory banner lands;
-  let everyone die, or the 100th day pass, and it is defeat — then you
-  keep playing in free play.
+- **More traits — born and earned**: people are born with one of
+  seven traits (Strong, Wise, Swift, Hardy, Brave, Fertile,
+  Healthy) and can earn four more in a life — Veteran (survived a
+  war, fights 20% harder), Crippled (wounded in a war, walks half
+  as fast and fights at half strength), Plague Survivor (immune for
+  life), Famine Survivor (hunger rises 25% slower). The Inspect
+  panel shows them ("Acquired: Veteran, Crippled").
+- **Goals, eras & achievements**: there is something to aim for now,
+  and the game never ends on you. The HUD's goal line points at the
+  next achievement to chase ("Next: Five Villages · 2/9
+  achievements"), and once all nine are unlocked it points at the
+  next era. Nine achievements mark the way ("First Village", "Raise a
+  City", "Save a Village", "Third Generation"...).
 - **Resources, miners & era buildings**: the mountains hold more than
   scenery now. Every peak carries stone, iron, marble or steel —
   stone common, steel the rarest — and a village ringed by mountains
