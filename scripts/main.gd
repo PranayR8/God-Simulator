@@ -47,6 +47,7 @@ var _last_paint_tile := Vector2i(-1, -1)
 @onready var villages: Villages = $Villages
 @onready var powers: Powers = $Powers
 @onready var disasters: Disasters = $Disasters
+@onready var wars: Wars = $Wars
 @onready var save_system: SaveSystem = $SaveSystem
 @onready var camera: Camera2D = $Camera2D
 @onready var hud: Hud = $HUD
@@ -64,6 +65,10 @@ func _ready() -> void:
 	disasters.agents = agents
 	disasters.villages = villages
 	disasters.event_log = event_log
+	wars.world = world
+	wars.agents = agents
+	wars.villages = villages
+	wars.event_log = event_log
 	# History: villages and births report through signals; Main stamps
 	# the day and writes them into the log, and the HUD redraws.
 	agents.child_born.connect(_on_child_born)
@@ -87,7 +92,7 @@ func _ready() -> void:
 	hud.zoom_fit_pressed.connect(_fit_camera)
 	if save_system.save_exists():
 		var data := save_system.load_game()
-		if save_system.apply_save(data, world, agents, villages, event_log):
+		if save_system.apply_save(data, world, agents, villages, event_log, wars):
 			day = int(data.get("day", 1))
 			total_ticks = int(data.get("ticks", 0))
 			hud.set_hint("World loaded — welcome back!")
@@ -103,6 +108,7 @@ func _new_world() -> void:
 	world.generate_new()
 	agents.clear_all()
 	villages.clear_all()
+	wars.clear_all()
 	day = 1
 	total_ticks = 0
 	event_log.clear()
@@ -115,7 +121,7 @@ func _new_world() -> void:
 	hud.set_hint("New world! Paint terrain, then spawn people.")
 
 func _save_quietly() -> void:
-	save_system.save_game(world, agents, villages, event_log, day, total_ticks)
+	save_system.save_game(world, agents, villages, event_log, day, total_ticks, wars)
 
 
 # --- simulation ------------------------------------------------------------
@@ -146,6 +152,7 @@ func _do_tick() -> void:
 	powers.tick_cooldowns()  # blessing cooldowns count down
 	agents.tick(TICK_INTERVAL, season, day)
 	villages.tick(day)
+	wars.tick(day)  # raids, marches, battles, and their outcomes
 	if total_ticks % 40 == 0:
 		_save_quietly()  # autosave every 40 ticks (~10s at 1x)
 	_update_hud()
@@ -527,7 +534,7 @@ func _on_speed_pressed() -> void:
 	hud.set_speed(SPEEDS[speed_index])
 
 func _on_save_pressed() -> void:
-	if save_system.save_game(world, agents, villages, event_log, day, total_ticks):
+	if save_system.save_game(world, agents, villages, event_log, day, total_ticks, wars):
 		hud.set_hint("World saved.")
 	else:
 		hud.set_hint("Save failed!")

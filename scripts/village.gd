@@ -46,6 +46,12 @@ class VillageData:
 	## is before it, the village is blessed: its people breed twice as
 	## often and its farmers bring in one extra unit of food per cycle.
 	var blessed_until_day: int = 0
+	## Phase 10 — war. last_war_day is the day the village's last war
+	## ended (0 = never at war). A village cannot raid again until
+	## WAR_COOLDOWN_DAYS have passed since then, so a war is an event,
+	## not a permanent state — the villages get time to recover, and a
+	## village that just fought does not immediately start another.
+	var last_war_day: int = 0
 
 	func _init(p_name: String, p_tile: Vector2i, p_day: int, p_color: Color) -> void:
 		name = p_name
@@ -296,6 +302,21 @@ func population_of(v: VillageData) -> int:
 	var n := 0
 	for a in agents.agents:
 		if a.kind == SimAgent.Kind.PERSON and a.village == idx:
+			n += 1
+	return n
+
+## The adult citizens of a village (children do not fight). Wars use
+## this: the raiding party is half the attacker's adults, and the
+## defenders are half the defender's adults (before the wall bonus).
+func adults_of(v: VillageData) -> int:
+	if agents == null:
+		return 0
+	var idx := villages.find(v)
+	if idx < 0:
+		return 0
+	var n := 0
+	for a in agents.agents:
+		if a.kind == SimAgent.Kind.PERSON and a.village == idx and not a.is_child():
 			n += 1
 	return n
 

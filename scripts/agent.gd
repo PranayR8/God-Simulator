@@ -77,6 +77,15 @@ var blessed: bool = false
 ## burns out instead of lingering forever.
 var sick: float = 0.0
 var immune: bool = false
+
+## War (Phase 10). at_war is the index into Wars.wars for the war this
+## person is marching in (-1 = at home, not at war); war_target is
+## where they are marching to (the enemy village's centre). A raider
+## walks to the enemy, fights there, and walks home when the war ends
+## (or dies trying). While at war they do no job and do not breed —
+## they are away from home.
+var at_war: int = -1
+var war_target: Vector2 = Vector2.ZERO
 const BLESS_SPEED_MULT := 1.5    # blessed people walk half again as fast
 const BLESS_REGEN_MULT := 3.0    # blessed people recover health 3x as fast
 const BLESS_LIFESPAN_MULT := 1.5 # blessed people live half again as long

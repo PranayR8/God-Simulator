@@ -163,6 +163,35 @@ func _cold_text(village_name: String, count: int) -> String:
 		return "A villager of %s froze to death" % village_name
 	return "%d villagers of %s froze to death" % [count, village_name]
 
+## A death in battle (Phase 10, war). Aggregated like the other deaths:
+## several falling in one village on one day become one line, or a hard
+## battle would flood the log. village_name is the home village of the
+## fallen (a raider who dies is counted to their own village).
+func add_war_death(day: int, village_name: String) -> void:
+	if not entries.is_empty():
+		var last: Dictionary = entries[entries.size() - 1]
+		if String(last.get("kind", "")) == "war" \
+				and int(last.get("day", -1)) == day \
+				and String(last.get("village", "")) == village_name:
+			var count := int(last.get("count", 1)) + 1
+			last["count"] = count
+			last["text"] = _war_text(village_name, count)
+			changed.emit()
+			return
+	entries.append({
+		"day": day, "text": _war_text(village_name, 1), "kind": "war",
+		"village": village_name, "count": 1,
+	})
+	_trim()
+	changed.emit()
+
+func _war_text(village_name: String, count: int) -> String:
+	if village_name == "":
+		return "A nomad fell in battle" if count == 1 else "%d nomads fell in battle" % count
+	if count == 1:
+		return "A villager of %s fell in battle" % village_name
+	return "%d villagers of %s fell in battle" % [count, village_name]
+
 ## A village reaching a new growth stage (or falling back down one):
 ## "Wilwick became a Town" / "Wilwick fell back to a Village". One
 ## line per change — stages move slowly, so this never floods the log.

@@ -90,6 +90,20 @@ into a real mobile app.
   History, and the **Disaster** button lets you unleash a random one
   where you tap (10-day cooldown). A crowded village hit by plague
   lost half its people; a sparse settlement barely noticed it.
+- **War**: villages have rivals now. A village that is crowded (30+
+  people) or hungry (its food store below half a unit per person) raids
+  its nearest neighbour within 30 tiles, if neither is already at war
+  and neither has fought in the last 10 days. A war party of adult
+  citizens — half the adults, 3 to 15 — walks to the enemy territory
+  (a red dot marks each raider); when the first raider crosses the
+  border, the battle begins for a day, and both villages' borders turn
+  red with crossed swords marking the clash. Numbers decide it, and a
+  Town or City wall multiplies the defender's strength by 1.5: the
+  winner takes up to half the loser's food (capped at 15), the loser
+  loses half its fighters and the winner a few of its own, and the
+  whole thing is in the History ("Wilwick has declared war on
+  Kelholt!"). A bigger walled village beats a smaller unwalled one;
+  the loser comes out poorer in people and food.
   (Wilwick, Kelholt, Bramley…) that grows houses and population over time.
   Every village owns a territory — a coloured border that grows with its
   citizens and stops at the halfway point to its nearest neighbour, so

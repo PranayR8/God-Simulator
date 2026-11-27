@@ -13,7 +13,7 @@ const SAVE_PATH := "user://world.json"
 func save_exists() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)
 
-func save_game(world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog, day: int, ticks: int) -> bool:
+func save_game(world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog, day: int, ticks: int, wars: Wars = null) -> bool:
 	var data := {
 		"version": 5,
 		"seed": world.seed_value,
@@ -25,6 +25,7 @@ func save_game(world: GodSimWorld, agents: Agents, villages: Villages, event_log
 		"drought_until": world.drought_until_day,
 		"burning": _burning_to_data(world),
 		"villages": _villages_to_data(villages),
+		"wars": wars.to_data() if wars != null else [],
 		"log": event_log.to_data(),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -59,7 +60,7 @@ func _agents_to_data(agents: Agents) -> Array:
 		# are likewise stored for everyone (sheep keep 0, which they
 		# ignore) so a loaded world keeps its generations instead of
 		# resetting everyone to a newborn.
-		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job, "blessed": a.blessed, "sick": a.sick, "immune": a.immune})
+		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job, "blessed": a.blessed, "sick": a.sick, "immune": a.immune, "at_war": a.at_war})
 	return out
 
 ## Berries as a flat list of [x, y, count] triples (only tiles that
@@ -82,14 +83,14 @@ func _burning_to_data(world: GodSimWorld) -> Array:
 func _villages_to_data(villages: Villages) -> Array:
 	var out: Array = []
 	for v in villages.villages:
-		out.append({"name": v.name, "x": v.tile.x, "y": v.tile.y, "day": v.founded_day, "color": v.color.to_html(), "food": v.food, "wood": v.wood, "extra_houses": v.extra_houses_built, "blessed_until": v.blessed_until_day})
+		out.append({"name": v.name, "x": v.tile.x, "y": v.tile.y, "day": v.founded_day, "color": v.color.to_html(), "food": v.food, "wood": v.wood, "extra_houses": v.extra_houses_built, "blessed_until": v.blessed_until_day, "last_war": v.last_war_day})
 	return out
 
 ## Rebuild the world from loaded data. Returns false if the data is empty
 ## or unusable (caller should generate a fresh world instead).
 ## Old saves have no "log" key — the history just starts empty — and
 ## no "berries" key — forests restock to full (see rebuild_berries).
-func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog) -> bool:
+func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: Villages, event_log: EventLog, wars: Wars = null) -> bool:
 	if data.is_empty():
 		return false
 	world.seed_value = int(data.get("seed", 0))
@@ -136,6 +137,10 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		na.blessed = bool(d.get("blessed", false))
 		na.sick = float(d.get("sick", 0.0))
 		na.immune = bool(d.get("immune", false))
+		# Phase 10 — a raider's war mark (old saves have none: at home).
+		# The war itself is restored below, so the mark points at a
+		# real war again instead of dangling.
+		na.at_war = int(d.get("at_war", -1))
 		agents.agents.append(na)
 	villages.clear_all()
 	for item in data.get("villages", []):
@@ -159,7 +164,16 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		nv.wood = float(d.get("wood", 0.0))
 		nv.extra_houses_built = int(d.get("extra_houses", 0))
 		nv.blessed_until_day = int(d.get("blessed_until", 0))
+		# Phase 10 — the day its last war ended (old saves have none:
+		# it has never been at war, so it may raid at once).
+		nv.last_war_day = int(d.get("last_war", 0))
 		villages.villages.append(nv)
+	# Phase 10 — a war in progress carries over a save (old saves have
+	# none: no wars). Restored after the agents, so the raiders' war
+	# marks point at a real war. Skipped when the caller did not pass
+	# a Wars node (older tests) — those worlds simply have no wars.
+	if wars != null:
+		wars.from_data(data.get("wars", []))
 	event_log.from_data(data.get("log", []))
 	world.queue_redraw()
 	agents.queue_redraw()

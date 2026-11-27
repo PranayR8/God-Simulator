@@ -155,7 +155,9 @@ func tick(dt: float, p_season: int, p_day: int) -> void:
 				continue
 			_try_eat(a)
 		_move_agent(a, dt)
-		if a.kind == SimAgent.Kind.PERSON and a.job >= 0 and not a.is_child():
+		# Phase 10 — a raider is away at war: they do no job while
+		# they march and fight (their work is the war).
+		if a.kind == SimAgent.Kind.PERSON and a.job >= 0 and not a.is_child() and a.at_war < 0:
 			_do_job(a)
 		i += 1
 	_try_breed()
@@ -428,6 +430,27 @@ func _move_agent(a: SimAgent, dt: float) -> void:
 ## first (see _nearest_food_tile) — they may step a few tiles past
 ## their border to forage, but no further.
 func _pick_target(a: SimAgent) -> Vector2:
+	# Phase 10 — a raider marches to war. They do not wander home and
+	# do not pick a nearby target; they hop from waypoint to waypoint
+	# toward the enemy village (4 tiles at a time, always landing on
+	# walkable land), so a lake or a mountain in the way does not stop
+	# the march — they slide around it instead of walking into it and
+	# getting stuck. Close to the enemy they mill around its centre
+	# (the battle is fought there).
+	if a.kind == SimAgent.Kind.PERSON and a.at_war >= 0:
+		var to_enemy := a.war_target - a.pos
+		var dist := to_enemy.length()
+		if dist < 48.0:
+			return a.war_target + Vector2(_rng.randf_range(-24, 24), _rng.randf_range(-24, 24))
+		var dir := to_enemy / dist
+		var waypoint := a.pos + dir * (4.0 * GodSimWorld.TILE)
+		var wt := world.world_to_tile(waypoint)
+		for attempt in 8:
+			var nx := wt.x + _rng.randi_range(-2, 2)
+			var ny := wt.y + _rng.randi_range(-2, 2)
+			if world.in_bounds(nx, ny) and world.is_walkable(nx, ny):
+				return world.tile_to_world(nx, ny)
+		return a.pos
 	if a.kind == SimAgent.Kind.PERSON and a.hunger >= HUNGER_SEEK:
 		var food := _nearest_food_tile(a)
 		if food.x >= 0:
@@ -531,6 +554,11 @@ func _try_breed() -> void:	# A creature breeds when it stands next to another of
 			continue
 		if a.is_child():
 			# Children are too young to have children of their own.
+			continue
+		if a.kind == SimAgent.Kind.PERSON and a.at_war >= 0:
+			# Phase 10 — raiders do not breed while they are away at
+			# war (and a raider standing in the enemy village should
+			# not start a family there).
 			continue
 		if a.kind == SimAgent.Kind.PERSON and a.hunger >= HUNGER_SEEK:
 			# Only the well-fed breed. A village that outgrows its food
