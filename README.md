@@ -124,13 +124,22 @@ into a real mobile app.
   a Wise bloodline is led by a Wise hero and feeds better.
 - **Goals, eras & achievements**: there is something to aim for now.
   The HUD shows the current goal from the start — "Grow a village to
-  100 citizens before Day 100" — with live progress. Your people move
-  through eras (Stone → Bronze → Iron → Classical) as they hit
-  milestones: a first City, 100 citizens, surviving 10 winters and
-  winning a war. Nine achievements mark the way ("First Village",
-  "Raise a City", "Save a Village", "Third Generation"...). Win the
-  scenario and a victory banner lands; let everyone die, or the 100th
-  day pass, and it is defeat — then you keep playing in free play.
+  100 citizens before Day 100" — with live progress. Nine achievements
+  mark the way ("First Village", "Raise a City", "Save a Village",
+  "Third Generation"...). Win the scenario and a victory banner lands;
+  let everyone die, or the 100th day pass, and it is defeat — then you
+  keep playing in free play.
+- **Resources, miners & era buildings**: the mountains hold more than
+  scenery now. Every peak carries stone, iron, marble or steel —
+  stone common, steel the rarest — and a village ringed by mountains
+  hires miners, who work the nearest peak and haul its resource into
+  the store (the label shows what a village actually has). The eras
+  advance on what your people mine, not on a day count: stone moves
+  the world into Bronze, iron into Iron, marble into Classical, steel
+  into Medieval. And the ages look different — Stone thatch huts,
+  Bronze warm timber, Iron grey stone and slate, Classical white
+  marble with a column, Medieval dark stone with a steep roof — so
+  you can tell the era from the rooftops.
   Their deeds go in the History ("Perrin the Swift became a hero of
   Wilwick — founder of Wilwick"), and when a hero dies they are named
   too ("Finn the Swift of Wilwick has died") — losing a hero costs the

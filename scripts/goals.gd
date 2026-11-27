@@ -3,11 +3,11 @@ extends Node
 
 ## Phase 13 — goals, eras & achievements.
 ##
-## Eras: Stone -> Bronze -> Iron -> Classical, each unlocked by a
-## milestone (Bronze: a village reaches City; Iron: 100 citizens;
-## Classical: survive 10 winters AND win a war). The era is a
-## progression marker — the log announces each one, so the player gets
-## a clear "you did it" moment.
+## Eras: Stone -> Bronze -> Iron -> Classical -> Medieval, each
+## unlocked by mining a new material (stone, iron, marble, steel).
+## The era is a progression marker — the log announces each one, so
+## the player gets a clear "you did it" moment — and the houses
+## redraw in the era's style, so the age is visible on the map.
 ##
 ## Achievements: a checklist of nine things to do. Each one unlocks
 ## once, the first time its condition is true, and the log names it.
@@ -22,9 +22,13 @@ extends Node
 ## Goals never touches the game directly — Main calls tick(day) every
 ## tick and connects the signals to the log and the banner.
 
-const ERA_NAMES := ["Stone", "Bronze", "Iron", "Classical"]
-const ERA_IRON_POP := 100
-const ERA_CLASSICAL_WINTERS := 10
+## Phase 15 — five eras, and they advance on what the villages have
+## mined: stone -> Bronze, iron -> Iron, marble -> Classical, steel ->
+## Medieval. The old milestone eras (first City, 100 citizens, 10
+## winters + a war) are achievements now, not era gates — the age
+## advances because your people learned to use a new material, not
+## because a counter ticked over.
+const ERA_NAMES := ["Stone", "Bronze", "Iron", "Classical", "Medieval"]
 const SCENARIO_TARGET_POP := 100
 const SCENARIO_DEADLINE_DAY := 100
 
@@ -93,21 +97,39 @@ func tick(day: int) -> void:
 	_check_scenario(day)
 
 func _check_eras() -> void:
-	# Bronze: a village reaches City stage (population 60).
-	if era == 0:
-		for v in villages.villages:
-			if villages.stage_of(v) >= 3:
-				era = 1
-				era_changed.emit(ERA_NAMES[era])
-				break
-	# Iron: 100 citizens in total.
-	if era == 1 and agents.count_people() >= ERA_IRON_POP:
+	# Each era unlocks when ANY village first stockpiles its resource.
+	# A village that mines stone moves the whole world into Bronze;
+	# iron into Iron; marble into Classical; steel into Medieval.
+	if era == 0 and _any_village_has("stone"):
+		era = 1
+		era_changed.emit(ERA_NAMES[era])
+	if era == 1 and _any_village_has("iron"):
 		era = 2
 		era_changed.emit(ERA_NAMES[era])
-	# Classical: survive 10 winters AND win a war.
-	if era == 2 and winters_survived >= ERA_CLASSICAL_WINTERS and wars_won >= 1:
+	if era == 2 and _any_village_has("marble"):
 		era = 3
 		era_changed.emit(ERA_NAMES[era])
+	if era == 3 and _any_village_has("steel"):
+		era = 4
+		era_changed.emit(ERA_NAMES[era])
+
+## Does any village have at least one unit of this mined resource?
+func _any_village_has(resource: String) -> bool:
+	for v in villages.villages:
+		match resource:
+			"stone":
+				if v.stone >= 1.0:
+					return true
+			"iron":
+				if v.iron >= 1.0:
+					return true
+			"marble":
+				if v.marble >= 1.0:
+					return true
+			"steel":
+				if v.steel >= 1.0:
+					return true
+	return false
 
 func _check_achievements() -> void:
 	var people := agents.count_people()
@@ -195,10 +217,12 @@ func goal_text(day: int) -> String:
 func next_era_text() -> String:
 	match era:
 		0:
-			return "Next era: Bronze — raise a village to City."
+			return "Next era: Bronze — mine stone."
 		1:
-			return "Next era: Iron — reach 100 citizens."
+			return "Next era: Iron — mine iron."
 		2:
-			return "Next era: Classical — survive 10 winters and win a war."
+			return "Next era: Classical — mine marble."
+		3:
+			return "Next era: Medieval — mine steel."
 		_:
-			return "Classical era — build as you like."
+			return "Medieval era — build as you like."

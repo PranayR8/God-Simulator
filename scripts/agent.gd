@@ -58,8 +58,9 @@ const JOB_NONE := -1
 const JOB_FARMER := 0
 const JOB_WOODCUTTER := 1
 const JOB_BUILDER := 2
-const JOB_NAMES := ["Farmer", "Woodcutter", "Builder"]
-const JOB_COLORS := [Color("#27ae60"), Color("#8b5a2b"), Color("#7f8c8d")]
+const JOB_MINER := 3
+const JOB_NAMES := ["Farmer", "Woodcutter", "Builder", "Miner"]
+const JOB_COLORS := [Color("#27ae60"), Color("#8b5a2b"), Color("#7f8c8d"), Color("#5d6d7e")]
 var job: int = JOB_NONE
 var job_timer: float = 0.0
 

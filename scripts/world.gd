@@ -14,6 +14,31 @@ const TILE := 24.0
 # Terrain type ids. SCORCHED is what lightning and meteors leave behind.
 enum Terrain { GRASS, WATER, FOREST, MOUNTAIN, SCORCHED }
 
+## Phase 15 — mountain resources. Each mountain tile holds one of four
+## resources, tiered by rarity: stone (common), iron, marble, steel
+## (rarest). The resource is a pure function of the tile and the
+## world's seed, so it needs no storage and survives a save/load — a
+## mountain keeps its resource until a miner takes it (the tile
+## becomes grass). Miners haul the resource to their village, and the
+## eras advance on what the villages have stockpiled (stone -> Bronze,
+## iron -> Iron, marble -> Classical, steel -> Medieval).
+const RES_STONE := 0
+const RES_IRON := 1
+const RES_MARBLE := 2
+const RES_STEEL := 3
+const RES_NAMES := ["Stone", "Iron", "Marble", "Steel"]
+
+func mountain_resource_at(x: int, y: int) -> int:
+	var h := (x * 73856093) ^ (y * 19349663) ^ (seed_value * 83492791)
+	var roll: int = abs(h) % 100
+	if roll < 60:
+		return RES_STONE
+	if roll < 85:
+		return RES_IRON
+	if roll < 95:
+		return RES_MARBLE
+	return RES_STEEL
+
 const TERRAIN_COLORS := {
 	Terrain.GRASS: Color("#7ec850"),
 	Terrain.WATER: Color("#3f8fd2"),

@@ -84,7 +84,7 @@ func _burning_to_data(world: GodSimWorld) -> Array:
 func _villages_to_data(villages: Villages) -> Array:
 	var out: Array = []
 	for v in villages.villages:
-		out.append({"name": v.name, "x": v.tile.x, "y": v.tile.y, "day": v.founded_day, "color": v.color.to_html(), "food": v.food, "wood": v.wood, "extra_houses": v.extra_houses_built, "blessed_until": v.blessed_until_day, "last_war": v.last_war_day})
+		out.append({"name": v.name, "x": v.tile.x, "y": v.tile.y, "day": v.founded_day, "color": v.color.to_html(), "food": v.food, "wood": v.wood, "stone": v.stone, "iron": v.iron, "marble": v.marble, "steel": v.steel, "extra_houses": v.extra_houses_built, "blessed_until": v.blessed_until_day, "last_war": v.last_war_day})
 	return out
 
 ## Goals as a Dictionary (era, winters, wars won, achievements, and
@@ -194,6 +194,10 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		# woodcutters bring timber in.
 		nv.food = float(d.get("food", 0.0))
 		nv.wood = float(d.get("wood", 0.0))
+		nv.stone = float(d.get("stone", 0.0))
+		nv.iron = float(d.get("iron", 0.0))
+		nv.marble = float(d.get("marble", 0.0))
+		nv.steel = float(d.get("steel", 0.0))
 		nv.extra_houses_built = int(d.get("extra_houses", 0))
 		nv.blessed_until_day = int(d.get("blessed_until", 0))
 		# Phase 10 — the day its last war ended (old saves have none:

@@ -36,6 +36,15 @@ class VillageData:
 	## empty — a new village has to produce before it can store.
 	var food: float = 0.0
 	var wood: float = 0.0
+	## Phase 15 — the mined stockpiles. Miners haul these from the
+	## mountains: stone (common), iron, marble, steel (rarest). The
+	## eras advance on what the villages have stockpiled (stone ->
+	## Bronze, iron -> Iron, marble -> Classical, steel -> Medieval),
+	## and the label shows the ones a village actually has.
+	var stone: float = 0.0
+	var iron: float = 0.0
+	var marble: float = 0.0
+	var steel: float = 0.0
 	## Builder-bonus houses actually constructed (each cost wood). The
 	## base houses (one per 3 citizens) are free — they're the village's
 	## basic dwellings — so a village with builders but no wood still
@@ -91,6 +100,15 @@ const STAGE_TERRITORY_CAPS := [7, 10, 13, 16]
 const STAGE_HOUSE_CAPS := [12, 16, 20, 24]
 const STAGE_HOUSE_SCALES := [1.0, 1.15, 1.3, 1.45]
 
+## Phase 15 — one house style per era [body, roof]. Stone: a small
+## thatch hut. Bronze: larger warm timber. Iron: grey stone and slate.
+## Classical: white marble with a terracotta roof and a column.
+## Medieval: dark stone with a steep dark roof.
+const ERA_HOUSE_BODY := [Color("#8a5a2b"), Color("#a67c52"), Color("#7d7468"), Color("#f4f6f7"), Color("#616a6b")]
+const ERA_HOUSE_ROOF := [Color("#c0392b"), Color("#b87333"), Color("#5d6d7e"), Color("#e67e22"), Color("#2c3e50")]
+## The keep's stone, per era (a City's tower follows the age too).
+const ERA_KEEP := [Color("#6b7a8d"), Color("#8d6e63"), Color("#5d6d7e"), Color("#f4f6f7"), Color("#2c3e50")]
+
 ## One colour per village, cycled in founding order — the same colour
 ## draws the territory border and the ring under each citizen, so you
 ## can see at a glance who belongs where.
@@ -102,6 +120,10 @@ const VILLAGE_COLORS := [
 var villages: Array[VillageData] = []
 var world: GodSimWorld = null
 var agents: Agents = null
+## Phase 15 — the current era (set by Main each tick from Goals).
+## The houses redraw in the era's style, so a village's look shifts
+## as the age advances.
+var era: int = 0
 
 ## Emitted when a village is founded. Main stamps the day and logs it.
 signal village_founded(village_name: String)
@@ -366,7 +388,16 @@ func stage_name(v: VillageData) -> String:
 ## The map label: name, stage, citizens, and the two stockpiles —
 ## "Wilwick · Town · 33 · F12 · W8". F is food, W is wood.
 func label_text(v: VillageData) -> String:
-	return "%s · %s · %d · F%d · W%d" % [v.name, stage_name(v), population_of(v), int(v.food), int(v.wood)]
+	var text := "%s · %s · %d · F%d · W%d" % [v.name, stage_name(v), population_of(v), int(v.food), int(v.wood)]
+	if v.stone >= 1.0:
+		text += " · S%d" % int(v.stone)
+	if v.iron >= 1.0:
+		text += " · I%d" % int(v.iron)
+	if v.marble >= 1.0:
+		text += " · M%d" % int(v.marble)
+	if v.steel >= 1.0:
+		text += " · St%d" % int(v.steel)
+	return text
 
 ## Is this village currently blessed (Phase 8)? The blessing lasts a
 ## season — 15 days from the day it was given.
@@ -477,6 +508,23 @@ func _forest_tiles_in_territory(v: VillageData) -> int:
 				n += 1
 	return n
 
+## Mountains inside the territory (for the miner share of jobs).
+func _mountain_tiles_in_territory(v: VillageData) -> int:
+	if world == null:
+		return 0
+	var r := territory_radius_tiles(v)
+	var n := 0
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			if Vector2i(dx, dy).length() > float(r):
+				continue
+			var t := Vector2i(v.tile.x + dx, v.tile.y + dy)
+			if not world.in_bounds(t.x, t.y):
+				continue
+			if world.get_terrain(t.x, t.y) == GodSimWorld.Terrain.MOUNTAIN:
+				n += 1
+	return n
+
 ## Give every adult citizen a job, based on what's nearby. Runs on the
 ## same 8th-tick scan as founding and claiming. A villager picks the job
 ## their village needs most: the target mix follows the forest inside
@@ -492,12 +540,24 @@ func _assign_jobs() -> void:
 	for vi in villages.size():
 		var v := villages[vi]
 		var forest := _forest_tiles_in_territory(v)
-		var targets := [0.4, 0.3, 0.3]
+		var mountains := _mountain_tiles_in_territory(v)
+		# Phase 15 — the miner share follows the mountains in the
+		# territory: a village ringed by peaks hires miners, one on
+		# open ground hires none. The four targets always sum to 1.
+		var targets := [0.4, 0.3, 0.3, 0.0]
+		if mountains >= 4:
+			targets = [0.35, 0.25, 0.2, 0.2]
+		elif mountains > 0:
+			targets = [0.4, 0.3, 0.25, 0.05]
 		if forest < 8:
-			targets = [0.4, 0.2, 0.4]
+			targets = [0.4, 0.2, 0.4, 0.0]
+			if mountains >= 4:
+				targets = [0.35, 0.2, 0.25, 0.2]
 		if forest == 0:
-			targets = [0.0, 0.0, 1.0]
-		var counts := [0, 0, 0]
+			targets = [0.0, 0.0, 1.0, 0.0]
+			if mountains >= 4:
+				targets = [0.0, 0.0, 0.7, 0.3]
+		var counts := [0, 0, 0, 0]
 		var adults := 0
 		for a in agents.agents:
 			if a.kind == SimAgent.Kind.PERSON and a.village == vi and not a.is_child():
@@ -511,7 +571,7 @@ func _assign_jobs() -> void:
 			# of the adult workforce.
 			var best := -1
 			var best_deficit := -INF
-			for j in 3:
+			for j in 4:
 				var deficit := float(targets[j]) * float(adults) - float(counts[j])
 				if deficit > best_deficit:
 					best_deficit = deficit
@@ -614,23 +674,32 @@ func _draw() -> void:
 					draw_arc(a.pos + Vector2(0, 8), 7.0, 0, TAU, 20, Color(vc, 0.85), 1.5)
 
 func _draw_house(pos: Vector2, house_scale: float) -> void:
+	var e := clampi(era, 0, ERA_HOUSE_BODY.size() - 1)
 	var body := Rect2(pos - Vector2(5, 2) * house_scale, Vector2(10, 8) * house_scale)
-	draw_rect(body, Color("#8a5a2b"))
+	draw_rect(body, ERA_HOUSE_BODY[e])
+	# Medieval roofs are steeper (the apex reaches higher).
+	var apex_y := -9.0 if e != 4 else -12.0
 	var roof := PackedVector2Array([
 		pos + Vector2(-7, -2) * house_scale,
-		pos + Vector2(0, -9) * house_scale,
+		pos + Vector2(0, apex_y) * house_scale,
 		pos + Vector2(7, -2) * house_scale,
 	])
-	draw_colored_polygon(roof, Color("#c0392b"))
+	draw_colored_polygon(roof, ERA_HOUSE_ROOF[e])
+	# Classical houses carry a column on the front — the marble age
+	# shows in the doorway.
+	if e == 3:
+		draw_rect(Rect2(pos + Vector2(-1, -2) * house_scale, Vector2(2, 8) * house_scale), Color("#d5dbdb"))
 
 ## The keep: a stone tower with battlements and the village flag.
 ## It sits at the centre of a City, above the houses.
 func _draw_keep(center: Vector2, color: Color) -> void:
+	var e := clampi(era, 0, ERA_KEEP.size() - 1)
+	var stone: Color = ERA_KEEP[e]
 	var body := Rect2(center + Vector2(-7, -6), Vector2(14, 20))
-	draw_rect(body, Color("#6b7a8d"))
+	draw_rect(body, stone)
 	for i in 3:
 		var mx := center.x - 7.0 + float(i) * 5.0
-		draw_rect(Rect2(Vector2(mx, center.y - 10), Vector2(3, 4)), Color("#6b7a8d"))
+		draw_rect(Rect2(Vector2(mx, center.y - 10), Vector2(3, 4)), stone)
 	var pole_top := center + Vector2(0, -10)
 	draw_line(pole_top, pole_top + Vector2(0, -8), Color("#4a3f35"), 1.5)
 	var flag := PackedVector2Array([

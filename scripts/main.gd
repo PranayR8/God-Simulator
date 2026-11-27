@@ -167,6 +167,7 @@ func _do_tick() -> void:
 	villages.tick(day)
 	wars.tick(day)  # raids, marches, battles, and their outcomes
 	goals.tick(day)  # eras, achievements, and the scenario
+	villages.era = goals.era  # Phase 15 — the houses redraw in the era's style
 	if total_ticks % 40 == 0:
 		_save_quietly()  # autosave every 40 ticks (~10s at 1x)
 	_update_hud()

@@ -332,6 +332,26 @@ func _do_job(a: SimAgent) -> void:
 			world.set_terrain(t.x, t.y, GodSimWorld.Terrain.GRASS)
 			# Phase 6: felling a tile yields timber for the store.
 			v.wood += Villages.WOOD_PER_TILE
+	elif a.job == SimAgent.JOB_MINER:
+		a.job_timer = 120.0
+		# Phase 15 — a miner works the nearest mountain in the
+		# territory: the mountain is consumed (it becomes grass) and
+		# its resource goes into the village store. Stone is common,
+		# iron rarer, marble rarer still, steel the rarest — and the
+		# eras advance on what the villages have stockpiled.
+		var t := _nearest_mountain_tile(v, radius + 2.0 * GodSimWorld.TILE)
+		if t.x >= 0:
+			var res := world.mountain_resource_at(t.x, t.y)
+			world.set_terrain(t.x, t.y, GodSimWorld.Terrain.GRASS)
+			match res:
+				GodSimWorld.RES_STONE:
+					v.stone += 1.0
+				GodSimWorld.RES_IRON:
+					v.iron += 1.0
+				GodSimWorld.RES_MARBLE:
+					v.marble += 1.0
+				GodSimWorld.RES_STEEL:
+					v.steel += 1.0
 
 ## Is there any forest to farm in the inner half of the territory?
 ## A farmer only produces food where there's land to farm — a village
@@ -376,6 +396,30 @@ func _furthest_forest_tile(v: Villages.VillageData, min_r: float, max_r: float) 
 			if d < min_r or d > max_r:
 				continue
 			if d > best_d:
+				best_d = d
+				best = t
+	return best
+
+## The mountain tile nearest the village centre within max_r — the
+## one a miner works first, so the village uses its closest peaks
+## before reaching further out. Returns (-1,-1) when there is no
+## mountain in range.
+func _nearest_mountain_tile(v: Villages.VillageData, max_r: float) -> Vector2i:
+	var center := world.tile_to_world(v.tile.x, v.tile.y)
+	var best := Vector2i(-1, -1)
+	var best_d := INF
+	var r_tiles := int(ceil(max_r / GodSimWorld.TILE))
+	for dy in range(-r_tiles, r_tiles + 1):
+		for dx in range(-r_tiles, r_tiles + 1):
+			var t := Vector2i(v.tile.x + dx, v.tile.y + dy)
+			if not world.in_bounds(t.x, t.y):
+				continue
+			if world.get_terrain(t.x, t.y) != GodSimWorld.Terrain.MOUNTAIN:
+				continue
+			var d := world.tile_to_world(t.x, t.y).distance_to(center)
+			if d > max_r:
+				continue
+			if d < best_d:
 				best_d = d
 				best = t
 	return best
