@@ -60,7 +60,7 @@ func _agents_to_data(agents: Agents) -> Array:
 		# are likewise stored for everyone (sheep keep 0, which they
 		# ignore) so a loaded world keeps its generations instead of
 		# resetting everyone to a newborn.
-		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job, "blessed": a.blessed, "sick": a.sick, "immune": a.immune, "at_war": a.at_war})
+		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job, "blessed": a.blessed, "sick": a.sick, "immune": a.immune, "at_war": a.at_war, "hero": a.hero, "hero_name": a.hero_name, "hero_trait": a.hero_trait, "hero_deed": a.hero_deed})
 	return out
 
 ## Berries as a flat list of [x, y, count] triples (only tiles that
@@ -141,6 +141,12 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		# The war itself is restored below, so the mark points at a
 		# real war again instead of dangling.
 		na.at_war = int(d.get("at_war", -1))
+		# Phase 11 — a hero's name, trait and deed (old saves have
+		# none: nobody was a hero yet).
+		na.hero = bool(d.get("hero", false))
+		na.hero_name = String(d.get("hero_name", ""))
+		na.hero_trait = int(d.get("hero_trait", -1))
+		na.hero_deed = String(d.get("hero_deed", ""))
 		agents.agents.append(na)
 	villages.clear_all()
 	for item in data.get("villages", []):

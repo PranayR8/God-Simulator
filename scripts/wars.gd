@@ -232,6 +232,12 @@ func _resolve_war(wi: int) -> void:
 	var walled := villages.stage_of(defender) >= 2
 	if walled:
 		defender_force *= WALL_BONUS
+	# Phase 11 — a Strong leader's village fights 25% harder, on
+	# either side of the battle.
+	if agents.leader_trait(ai) == SimAgent.HERO_TRAIT_STRONG:
+		attacker_force *= SimAgent.HERO_STRONG_MULT
+	if agents.leader_trait(di) == SimAgent.HERO_TRAIT_STRONG:
+		defender_force *= SimAgent.HERO_STRONG_MULT
 	var attacker_wins := attacker_force > defender_force
 	# The spoils: the winner takes half the loser's food, up to a cap.
 	var loser: Villages.VillageData = defender if attacker_wins else attacker
@@ -240,13 +246,32 @@ func _resolve_war(wi: int) -> void:
 	loser.food -= loot
 	winner.food += loot
 	if attacker_wins:
+		var leader := agents.leader_of(ai)
 		_kill_defenders(di, maxi(1, int(defender_force * LOSER_DEATH_FRACTION)))
 		_kill_raiders(war_id, maxi(1, int(attacker_force * WINNER_DEATH_FRACTION)))
 		event_log.add(current_day, "%s defeated %s in battle, taking %d food!" % [attacker.name, defender.name, int(loot)])
+		# Phase 11 — a hero who led their village to victory is named
+		# in the log (only if they lived to tell it).
+		if leader != null and agents.agents.has(leader):
+			event_log.add(current_day, "%s led %s to victory over %s." % [leader.hero_title(), attacker.name, defender.name])
 	else:
+		var leader := agents.leader_of(di)
 		_kill_raiders(war_id, maxi(1, int(attacker_force * LOSER_DEATH_FRACTION)))
 		_kill_defenders(di, maxi(1, int(defender_force * WINNER_DEATH_FRACTION)))
 		event_log.add(current_day, "%s repelled %s's raid — the raiders were driven off!" % [defender.name, attacker.name])
+		if leader != null and agents.agents.has(leader):
+			event_log.add(current_day, "%s held %s against %s's raid." % [leader.hero_title(), defender.name, attacker.name])
+	# Phase 11 — the oldest raider who came home alive becomes a hero:
+	# surviving a war is the kind of thing a village remembers.
+	var survivors := _party_for(war_id)
+	var oldest: SimAgent = null
+	for r in survivors:
+		if r.hero:
+			continue
+		if oldest == null or r.age > oldest.age:
+			oldest = r
+	if oldest != null:
+		agents.make_hero(oldest, "survived the war against " + defender.name)
 	_end_war(wi)
 
 ## Kill up to count raiders of this war (the fallen are counted to
@@ -261,6 +286,7 @@ func _kill_raiders(war_id: int, count: int) -> void:
 			home_name = villages.villages[a.village].name
 		agents.agents.erase(a)
 		event_log.add_war_death(current_day, home_name)
+		agents.note_hero_death(a)
 	if to_kill > 0:
 		agents.queue_redraw()
 
@@ -274,8 +300,10 @@ func _kill_defenders(di: int, count: int) -> void:
 			adults.append(a)
 	var to_kill := mini(count, adults.size())
 	for i in to_kill:
-		agents.agents.erase(adults[i])
+		var fallen: SimAgent = adults[i]
+		agents.agents.erase(fallen)
 		event_log.add_war_death(current_day, defender.name)
+		agents.note_hero_death(fallen)
 	if to_kill > 0:
 		agents.queue_redraw()
 

@@ -104,6 +104,19 @@ into a real mobile app.
   whole thing is in the History ("Wilwick has declared war on
   Kelholt!"). A bigger walled village beats a smaller unwalled one;
   the loser comes out poorer in people and food.
+- **Heroes**: individuals matter now. A person the god blesses, the
+  first citizen of a village (its founder), or someone who survives a
+  war or a plague becomes a named hero — "Mara the Swift", "Joren the
+  Hardy" — with a trait (Strong, Wise, Swift, Hardy) and a golden ring
+  instead of the plain village ring, so you can spot them at a glance.
+  The oldest hero leads their village, and their trait boosts the whole
+  village: Strong fights 25% harder in war, Wise farmers bring in an
+  extra food per cycle, Swift people walk 25% faster and breed sooner,
+  Hardy people recover twice as fast and take half the winter cold.
+  Their deeds go in the History ("Perrin the Swift became a hero of
+  Wilwick — founder of Wilwick"), and when a hero dies they are named
+  too ("Finn the Swift of Wilwick has died") — losing a hero costs the
+  village its leader's boost.
   (Wilwick, Kelholt, Bramley…) that grows houses and population over time.
   Every village owns a territory — a coloured border that grows with its
   citizens and stops at the halfway point to its nearest neighbour, so

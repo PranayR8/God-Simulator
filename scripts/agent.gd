@@ -86,6 +86,44 @@ var immune: bool = false
 ## they are away from home.
 var at_war: int = -1
 var war_target: Vector2 = Vector2.ZERO
+
+## Heroes (Phase 11). A hero is a named person who matters: they carry
+## a trait that helps their village, wear a golden ring instead of the
+## plain village ring, and their deeds go in the log. A hero is made
+## when the god blesses them, when they found a village, or when they
+## survive a war or a plague. hero_name is their first name; hero_trait
+## is one of the four traits below; hero_deed is why they became a
+## hero ("blessed by the god", "founder of Wilwick").
+const HERO_TRAIT_STRONG := 0
+const HERO_TRAIT_WISE := 1
+const HERO_TRAIT_SWIFT := 2
+const HERO_TRAIT_HARDY := 3
+const HERO_TRAIT_NAMES := ["Strong", "Wise", "Swift", "Hardy"]
+const HERO_NAMES := [
+	"Mara", "Alden", "Bryn", "Cedric", "Delia", "Edmund", "Freya",
+	"Gareth", "Hilda", "Ivor", "Jessa", "Kael", "Lyra", "Magnus",
+	"Nia", "Orin", "Petra", "Quinn", "Rowan", "Sable", "Tomas",
+	"Una", "Viktor", "Wren", "Yara", "Zeke", "Astrid", "Bram",
+	"Cora", "Dain", "Elowen", "Finn", "Greta", "Hugo", "Isla",
+	"Joren", "Kira", "Leif", "Mira", "Niko", "Odessa", "Perrin",
+	"Rhea", "Silas", "Tessa", "Ulric", "Vera", "Willa", "Yorick",
+	"Zola", "Ansel",
+]
+## What a trait does for the village its hero leads (the oldest hero
+## leads — see Agents.leader_of). Strong: the village fights 25%
+## harder in war. Wise: its farmers bring in 1 extra food per cycle.
+## Swift: its people walk 25% faster and breed 25% sooner. Hardy: its
+## people recover health twice as fast and take half the winter cold.
+const HERO_STRONG_MULT := 1.25
+const HERO_WISE_FARMER_BONUS := 1.0
+const HERO_SWIFT_SPEED_MULT := 1.25
+const HERO_SWIFT_BREED_MULT := 0.75
+const HERO_HARDY_REGEN_MULT := 2.0
+const HERO_HARDY_COLD_MULT := 0.5
+var hero: bool = false
+var hero_name: String = ""
+var hero_trait: int = -1
+var hero_deed: String = ""
 const BLESS_SPEED_MULT := 1.5    # blessed people walk half again as fast
 const BLESS_REGEN_MULT := 3.0    # blessed people recover health 3x as fast
 const BLESS_LIFESPAN_MULT := 1.5 # blessed people live half again as long
@@ -115,3 +153,9 @@ func speed() -> float:
 	if blessed:
 		s *= BLESS_SPEED_MULT
 	return s
+
+## "Mara the Swift" — the name the log and the player use for a hero.
+func hero_title() -> String:
+	if not hero or hero_trait < 0 or hero_trait >= HERO_TRAIT_NAMES.size():
+		return ""
+	return "%s the %s" % [hero_name, HERO_TRAIT_NAMES[hero_trait]]

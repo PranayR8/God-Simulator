@@ -86,6 +86,14 @@ signal starved(village_name: String)
 ## nomad; Main logs it (aggregated per village per day).
 signal old_age_died(village_name: String)
 
+## Phase 11 — heroes. hero_made: a person became a hero (hero_title
+## is "Mara the Swift", deed is why — "blessed by the god", "founder
+## of Wilwick"). hero_died: a hero died — Main logs it by name, so
+## losing a hero reads as a loss, not just a number. village_name is
+## "" for a nomad hero.
+signal hero_made(hero_title: String, village_name: String, deed: String)
+signal hero_died(hero_title: String, village_name: String)
+
 var _rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
@@ -104,6 +112,94 @@ func count_animals() -> int:
 		if a.kind == SimAgent.Kind.SHEEP:
 			n += 1
 	return n
+
+## Phase 11 — heroes. A hero is made when the god blesses them, when
+## they found a village, or when they survive a war or a plague (see
+## the callers: powers.bless_person_at, villages._try_found,
+## wars._resolve_war, and _update_plague below). Returns false when
+## the person is already a hero (or not a person) — a hero is made
+## once, and their name and trait are theirs for life.
+func make_hero(a: SimAgent, deed: String) -> bool:
+	if a == null or a.kind != SimAgent.Kind.PERSON or a.hero:
+		return false
+	a.hero = true
+	a.hero_name = _unused_hero_name()
+	a.hero_trait = _rng.randi_range(0, SimAgent.HERO_TRAIT_NAMES.size() - 1)
+	a.hero_deed = deed
+	hero_made.emit(a.hero_title(), _home_name(a), deed)
+	return true
+
+## A first name no living hero is using, so heroes stay distinct.
+func _unused_hero_name() -> String:
+	var used := {}
+	for a in agents:
+		if a.kind == SimAgent.Kind.PERSON and a.hero and a.hero_name != "":
+			used[a.hero_name] = true
+	var free: Array[String] = []
+	for n in SimAgent.HERO_NAMES:
+		if not used.has(n):
+			free.append(n)
+	if free.is_empty():
+		return SimAgent.HERO_NAMES[_rng.randi_range(0, SimAgent.HERO_NAMES.size() - 1)]
+	return free[_rng.randi_range(0, free.size() - 1)]
+
+## The hero citizens of a village.
+func heroes_of(village_idx: int) -> Array[SimAgent]:
+	var out: Array[SimAgent] = []
+	for a in agents:
+		if a.kind == SimAgent.Kind.PERSON and a.village == village_idx and a.hero:
+			out.append(a)
+	return out
+
+## The village's leader: its oldest hero. The leader's trait boosts
+## the whole village (see the trait effects below); when the leader
+## dies, the next-oldest hero takes over — and a village with no hero
+## has no leader and no boost, which is how losing a hero hurts.
+func leader_of(village_idx: int) -> SimAgent:
+	var best: SimAgent = null
+	for a in heroes_of(village_idx):
+		if best == null or a.age > best.age:
+			best = a
+	return best
+
+## The leader's trait for a village (-1 = no hero, no leader, no boost).
+func leader_trait(village_idx: int) -> int:
+	var l := leader_of(village_idx)
+	if l == null:
+		return -1
+	return l.hero_trait
+
+## The leader's trait for one person's village (-1 when they have no
+## village or their village has no hero). The trait effects below all
+## go through this, so a village's boost follows its leader.
+func _leader_trait_for(a: SimAgent) -> int:
+	if a.kind != SimAgent.Kind.PERSON or a.village < 0:
+		return -1
+	return leader_trait(a.village)
+
+## Does this village already have a hero who survived a plague? A
+## village remembers its plague survivor — only one is made per
+## village, so a plague does not mint a dozen heroes at once.
+func _has_plague_hero(village_idx: int) -> bool:
+	for a in heroes_of(village_idx):
+		if a.hero_deed == "survived the plague":
+			return true
+	return false
+
+## A hero's home village name ("" for a nomad).
+func _home_name(a: SimAgent) -> String:
+	if a.village >= 0 and villages != null and a.village < villages.villages.size():
+		return villages.villages[a.village].name
+	return ""
+
+## Report a hero's death. Call AFTER the hero is removed from the
+## list — the agent object still carries its name and village, but
+## heroes_of() no longer counts them, so Main can tell whether the
+## village has lost its last hero. Called at every place an agent is
+## erased (and by Wars for battle deaths).
+func note_hero_death(a: SimAgent) -> void:
+	if a.kind == SimAgent.Kind.PERSON and a.hero:
+		hero_died.emit(a.hero_title(), _home_name(a))
 
 func clear_all() -> void:
 	agents.clear()
@@ -202,6 +298,11 @@ func _do_job(a: SimAgent) -> void:
 			# unit per cycle (the blessing's growth).
 			if villages.is_blessed(v, current_day):
 				gain += BLESS_VILLAGE_FARMER_BONUS
+			# Phase 11 — a Wise leader's farmers bring in one extra
+			# unit per cycle too: wisdom feeds the village, and a fed
+			# village breeds (only the well-fed breed).
+			if _leader_trait_for(a) == SimAgent.HERO_TRAIT_WISE:
+				gain += SimAgent.HERO_WISE_FARMER_BONUS
 			v.food += gain
 	elif a.job == SimAgent.JOB_WOODCUTTER:
 		a.job_timer = 120.0
@@ -270,6 +371,7 @@ func _update_hunger(a: SimAgent) -> bool:
 				home_name = villages.villages[a.village].name
 			agents.erase(a)
 			starved.emit(home_name)
+			note_hero_death(a)
 			return true
 	else:
 		# Fed: slowly recover any health lost to an earlier hunger spell
@@ -279,6 +381,9 @@ func _update_hunger(a: SimAgent) -> bool:
 			var regen := HEALTH_REGEN_PER_TICK
 			if a.blessed:
 				regen *= SimAgent.BLESS_REGEN_MULT
+			# Phase 11 — a Hardy leader's people recover twice as fast.
+			if _leader_trait_for(a) == SimAgent.HERO_TRAIT_HARDY:
+				regen *= SimAgent.HERO_HARDY_REGEN_MULT
 			a.health = minf(HEALTH_MAX, a.health + regen)
 	return false
 
@@ -315,10 +420,16 @@ func _update_plague(a: SimAgent) -> bool:
 				home_name = villages.villages[a.village].name
 			agents.erase(a)
 			plague_died.emit(home_name)
+			note_hero_death(a)
 			return true
 		return false
 	# The sickness ran its course — recovered, and immune for life.
 	a.immune = true
+	# Phase 11 — surviving a plague can make a hero, but a village
+	# remembers only one plague survivor, so a plague does not mint
+	# a dozen heroes at once.
+	if a.village >= 0 and not _has_plague_hero(a.village):
+		make_hero(a, "survived the plague")
 	return false
 
 ## One tick of plague spreading: each sick person can pass it to anyone
@@ -368,13 +479,18 @@ func _update_cold(a: SimAgent) -> bool:
 	var protection := _winter_protection(a)
 	if protection >= 1.0:
 		return false
-	a.health -= COLD_DRAIN_PER_TICK * (1.0 - protection)
+	var drain := COLD_DRAIN_PER_TICK * (1.0 - protection)
+	# Phase 11 — a Hardy leader's people take half the winter cold.
+	if _leader_trait_for(a) == SimAgent.HERO_TRAIT_HARDY:
+		drain *= SimAgent.HERO_HARDY_COLD_MULT
+	a.health -= drain
 	if a.health <= 0.0:
 		var home_name := ""
 		if a.village >= 0 and villages != null and a.village < villages.villages.size():
 			home_name = villages.villages[a.village].name
 		agents.erase(a)
 		cold_died.emit(home_name)
+		note_hero_death(a)
 		return true
 	return false
 
@@ -388,6 +504,7 @@ func _update_aging(a: SimAgent) -> bool:
 		home_name = villages.villages[a.village].name
 	agents.erase(a)
 	old_age_died.emit(home_name)
+	note_hero_death(a)
 	return true
 
 ## If this person is hungry: first eat from their village's food store
@@ -416,7 +533,12 @@ func _move_agent(a: SimAgent, dt: float) -> void:
 		a.target = _pick_target(a)
 		a.has_target = true
 	var dir := (a.target - a.pos).normalized()
-	a.pos += dir * a.speed() * dt
+	var sp := a.speed()
+	# Phase 11 — a Swift leader's people walk 25% faster (they get to
+	# food, to work, and to war sooner).
+	if _leader_trait_for(a) == SimAgent.HERO_TRAIT_SWIFT:
+		sp *= SimAgent.HERO_SWIFT_SPEED_MULT
+	a.pos += dir * sp * dt
 	# Stay inside the map.
 	a.pos.x = clampf(a.pos.x, 4.0, GodSimWorld.WIDTH * GodSimWorld.TILE - 4.0)
 	a.pos.y = clampf(a.pos.y, 4.0, GodSimWorld.HEIGHT * GodSimWorld.TILE - 4.0)
@@ -586,7 +708,11 @@ func _try_breed() -> void:	# A creature breeds when it stands next to another of
 				# Children are born into their parent's village.
 				child.village = a.village
 			agents.append(child)
-			a.breed_cooldown = BREED_TIME
+			# Phase 11 — a Swift leader's people breed 25% sooner.
+			if _leader_trait_for(a) == SimAgent.HERO_TRAIT_SWIFT:
+				a.breed_cooldown = BREED_TIME * SimAgent.HERO_SWIFT_BREED_MULT
+			else:
+				a.breed_cooldown = BREED_TIME
 			if a.kind == SimAgent.Kind.PERSON:
 				people += 1
 				var home_name := ""
@@ -608,7 +734,9 @@ func kill_in_radius(center: Vector2, radius_px: float) -> int:
 	var i := agents.size() - 1
 	while i >= 0:
 		if agents[i].pos.distance_to(center) <= radius_px:
+			var gone: SimAgent = agents[i]
 			agents.remove_at(i)
+			note_hero_death(gone)
 			dead += 1
 		i -= 1
 	if dead > 0:

@@ -180,10 +180,17 @@ func _try_found(current_day: int) -> void:
 		villages.append(VillageData.new(village_name, tile, current_day, color))
 		village_founded.emit(village_name)
 		# The people standing here are the founders — they belong to the
-		# new village from the moment it exists.
+		# new village from the moment it exists. The first of them is
+		# the village's first citizen, and a founder becomes a hero
+		# (Phase 11): they are the one the village remembers.
+		var first_founder: SimAgent = null
 		for founder in agents.agents:
 			if founder.kind == SimAgent.Kind.PERSON and founder.village < 0 and founder.pos.distance_to(center) <= FOUND_RADIUS * GodSimWorld.TILE:
 				founder.village = new_index
+				if first_founder == null:
+					first_founder = founder
+		if first_founder != null:
+			agents.make_hero(first_founder, "founder of " + village_name)
 		# Adopt the founding stage silently — the founding log line
 		# already covers it, and a fresh village shouldn't also log
 		# "became a Hamlet" (or a Village, if a big cluster founded it).
@@ -594,12 +601,17 @@ func _draw() -> void:
 			draw_string(font, text_pos + Vector2(1, 1), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(0, 0, 0, 0.75))
 			draw_string(font, text_pos, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color.WHITE)
 	# A ring in the village colour under each citizen, at their feet —
-	# that is how you can see who belongs to which village.
+	# that is how you can see who belongs to which village. A hero
+	# (Phase 11) wears a golden ring instead — thicker and gold, so
+	# the people who matter stand out from the crowd at a glance.
 	if agents != null:
 		for a in agents.agents:
 			if a.kind == SimAgent.Kind.PERSON and a.village >= 0 and a.village < villages.size():
-				var vc: Color = villages[a.village].color
-				draw_arc(a.pos + Vector2(0, 8), 7.0, 0, TAU, 20, Color(vc, 0.85), 1.5)
+				if a.hero:
+					draw_arc(a.pos + Vector2(0, 8), 8.0, 0, TAU, 20, Color(1.0, 0.85, 0.2, 1.0), 2.5)
+				else:
+					var vc: Color = villages[a.village].color
+					draw_arc(a.pos + Vector2(0, 8), 7.0, 0, TAU, 20, Color(vc, 0.85), 1.5)
 
 func _draw_house(pos: Vector2, house_scale: float) -> void:
 	var body := Rect2(pos - Vector2(5, 2) * house_scale, Vector2(10, 8) * house_scale)

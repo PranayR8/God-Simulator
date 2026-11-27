@@ -72,6 +72,8 @@ func _ready() -> void:
 	# History: villages and births report through signals; Main stamps
 	# the day and writes them into the log, and the HUD redraws.
 	agents.child_born.connect(_on_child_born)
+	agents.hero_made.connect(_on_hero_made)
+	agents.hero_died.connect(_on_hero_died)
 	agents.starved.connect(_on_starved)
 	agents.old_age_died.connect(_on_old_age_died)
 	agents.cold_died.connect(_on_cold_died)
@@ -432,6 +434,30 @@ func _log_power(tool: String, killed: int) -> void:
 
 func _on_child_born(village_name: String) -> void:
 	event_log.add_birth(day, village_name)
+
+## Phase 11 — a hero is made: name them, their village, and why.
+## "Mara the Swift became a hero of Wilwick — blessed by the god".
+func _on_hero_made(hero_title: String, village_name: String, deed: String) -> void:
+	if village_name == "":
+		event_log.add(day, "%s became a hero — %s" % [hero_title, deed])
+	else:
+		event_log.add(day, "%s became a hero of %s — %s" % [hero_title, village_name, deed])
+
+## Phase 11 — a hero died: name them, so losing one reads as a loss.
+## If they were their village's last hero, say so — the village has
+## lost its leader and the boost that came with them.
+func _on_hero_died(hero_title: String, village_name: String) -> void:
+	if village_name == "":
+		event_log.add(day, "%s has died" % hero_title)
+	else:
+		event_log.add(day, "%s of %s has died" % [hero_title, village_name])
+		var idx := -1
+		for i in villages.villages.size():
+			if villages.villages[i].name == village_name:
+				idx = i
+				break
+		if idx >= 0 and agents.heroes_of(idx).is_empty():
+			event_log.add(day, "%s has lost its last hero" % village_name)
 
 func _on_starved(village_name: String) -> void:
 	event_log.add_starvation_death(day, village_name)

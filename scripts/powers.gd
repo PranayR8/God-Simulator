@@ -163,6 +163,10 @@ func bless_person_at(tile: Vector2i) -> int:
 		return 0
 	a.blessed = true
 	a.lifespan *= SimAgent.BLESS_LIFESPAN_MULT
+	# Phase 11 — a person the god blesses becomes a hero: they are
+	# marked, named, and remembered, and their trait helps their
+	# village while they live.
+	agents.make_hero(a, "blessed by the god")
 	_start_cooldown(Power.BLESS_PERSON, BLESS_PERSON_COOLDOWN)
 	_effects.append({
 		"kind": Power.BLESS_PERSON, "pos": a.pos,
