@@ -91,7 +91,7 @@ var war_target: Vector2 = Vector2.ZERO
 ## a trait that helps their village, wear a golden ring instead of the
 ## plain village ring, and their deeds go in the log. A hero is made
 ## when the god blesses them, when they found a village, or when they
-## survive a war or a plague. hero_name is their first name; hero_trait
+## survive a war or a plague. hero_name is their first name; trait
 ## is one of the four traits below; hero_deed is why they became a
 ## hero ("blessed by the god", "founder of Wilwick").
 const HERO_TRAIT_STRONG := 0
@@ -122,8 +122,24 @@ const HERO_HARDY_REGEN_MULT := 2.0
 const HERO_HARDY_COLD_MULT := 0.5
 var hero: bool = false
 var hero_name: String = ""
-var hero_trait: int = -1
 var hero_deed: String = ""
+## Traits, families & lineage (Phase 12). Every person carries a trait
+## (one of the four below), a family surname, and a generation. A
+## hero's trait is just their personal trait — the bloodline decides
+## what kind of hero they become, not a fresh random roll. A spawned
+## person starts a family of generation 1 with a random surname; a
+## child inherits a mix of their parents (see Agents._try_breed). When
+## a person becomes a hero they found a house named after their first
+## name, so their surname becomes their hero name and their generation
+## resets to 1 — "House of Mara" starts with Mara.
+const SURNAMES := [
+	"Ashford", "Stone", "River", "Hollow", "Field", "Wood", "Brook",
+	"Hill", "Marsh", "Thorn", "Vale", "Frost", "Ember", "Rowan",
+	"Sable", "Wren", "Hale", "Briar", "Fen", "Locke",
+]
+var innate_trait: int = -1
+var surname: String = ""
+var generation: int = 1
 const BLESS_SPEED_MULT := 1.5    # blessed people walk half again as fast
 const BLESS_REGEN_MULT := 3.0    # blessed people recover health 3x as fast
 const BLESS_LIFESPAN_MULT := 1.5 # blessed people live half again as long
@@ -135,6 +151,9 @@ func _init(p_kind: int, p_pos: Vector2) -> void:
 		shirt_color = SHIRT_COLORS[randi() % SHIRT_COLORS.size()]
 		hair_color = HAIR_COLORS[randi() % HAIR_COLORS.size()]
 		lifespan = randf_range(MIN_LIFESPAN_TICKS, MAX_LIFESPAN_TICKS)
+		innate_trait = randi() % HERO_TRAIT_NAMES.size()
+		surname = SURNAMES[randi() % SURNAMES.size()]
+		generation = 1
 
 func is_child() -> bool:
 	return kind == Kind.PERSON and age < CHILD_TICKS
@@ -155,7 +174,8 @@ func speed() -> float:
 	return s
 
 ## "Mara the Swift" — the name the log and the player use for a hero.
+## The trait is the person's own (inherited), not a fresh roll.
 func hero_title() -> String:
-	if not hero or hero_trait < 0 or hero_trait >= HERO_TRAIT_NAMES.size():
+	if not hero or innate_trait < 0 or innate_trait >= HERO_TRAIT_NAMES.size():
 		return ""
-	return "%s the %s" % [hero_name, HERO_TRAIT_NAMES[hero_trait]]
+	return "%s the %s" % [hero_name, HERO_TRAIT_NAMES[innate_trait]]

@@ -69,6 +69,11 @@ var agents: Array[SimAgent] = []
 var world: GodSimWorld = null
 var villages: Villages = null  # set by Main; used to keep citizens near home
 
+## Phase 12 — the highest generation born so far in each house
+## (surname -> generation). A house's milestone is logged once, when
+## its first child of a new generation is born.
+var _house_generations: Dictionary = {}
+
 ## Emitted when a child is born. village_name is "" for a nomad birth;
 ## Main stamps the day and lets the EventLog aggregate births.
 signal child_born(village_name: String)
@@ -93,6 +98,11 @@ signal old_age_died(village_name: String)
 ## "" for a nomad hero.
 signal hero_made(hero_title: String, village_name: String, deed: String)
 signal hero_died(hero_title: String, village_name: String)
+
+## Phase 12 — lineage. house_generation: a house reached a new
+## generation (generation 2+). Main logs it ("House of Mara, 3rd
+## generation"), so a bloodline can be traced in the History.
+signal house_generation(surname: String, generation: int)
 
 var _rng := RandomNumberGenerator.new()
 
@@ -124,7 +134,18 @@ func make_hero(a: SimAgent, deed: String) -> bool:
 		return false
 	a.hero = true
 	a.hero_name = _unused_hero_name()
-	a.hero_trait = _rng.randi_range(0, SimAgent.HERO_TRAIT_NAMES.size() - 1)
+	# Phase 12 — a hero keeps the trait they were born with (the
+	# bloodline decides what kind of hero they become). An old save's
+	# person may have no trait yet; give them one rather than leaving
+	# them traitless.
+	if a.innate_trait < 0:
+		a.innate_trait = _rng.randi_range(0, SimAgent.HERO_TRAIT_NAMES.size() - 1)
+	# Phase 12 — a hero founds a house named after their first name:
+	# their surname becomes their hero name and their generation
+	# resets to 1, so "House of Mara" starts with Mara and her
+	# children are its 2nd generation.
+	a.surname = a.hero_name
+	a.generation = 1
 	a.hero_deed = deed
 	hero_made.emit(a.hero_title(), _home_name(a), deed)
 	return true
@@ -167,7 +188,7 @@ func leader_trait(village_idx: int) -> int:
 	var l := leader_of(village_idx)
 	if l == null:
 		return -1
-	return l.hero_trait
+	return l.innate_trait
 
 ## The leader's trait for one person's village (-1 when they have no
 ## village or their village has no hero). The trait effects below all
@@ -707,6 +728,19 @@ func _try_breed() -> void:	# A creature breeds when it stands next to another of
 			if a.kind == SimAgent.Kind.PERSON:
 				# Children are born into their parent's village.
 				child.village = a.village
+				# Phase 12 — a child inherits a mix of their parents:
+				# one parent's trait at random (the mate is the nearest
+				# adult of the same kind standing close; with no mate
+				# the child takes the breeding parent's trait), the
+				# breeding parent's surname, and the next generation.
+				var mate := _find_mate(a)
+				if mate != null and _rng.randf() < 0.5:
+					child.innate_trait = mate.innate_trait
+				else:
+					child.innate_trait = a.innate_trait
+				child.surname = a.surname
+				child.generation = a.generation + 1
+				_note_birth_house(child)
 			agents.append(child)
 			# Phase 11 — a Swift leader's people breed 25% sooner.
 			if _leader_trait_for(a) == SimAgent.HERO_TRAIT_SWIFT:
@@ -721,6 +755,35 @@ func _try_breed() -> void:	# A creature breeds when it stands next to another of
 				child_born.emit(home_name)
 			else:
 				sheep += 1
+
+## The nearest adult of the same kind standing close — the other
+## parent, for inheritance. Returns null when there is no adult mate
+## nearby (the child then takes the breeding parent's trait alone).
+func _find_mate(a: SimAgent) -> SimAgent:
+	var best: SimAgent = null
+	var best_d := 30.0
+	for other in agents:
+		if other == a or other.kind != a.kind:
+			continue
+		if other.kind == SimAgent.Kind.PERSON and other.is_child():
+			continue
+		var d := other.pos.distance_to(a.pos)
+		if d <= best_d:
+			best = other
+			best_d = d
+	return best
+
+## A house reached a new generation: record it, and tell Main once
+## (generation 2+, so the founding generation itself is not a
+## milestone — the hero's founding line already covers it).
+func _note_birth_house(child: SimAgent) -> void:
+	if child.surname == "":
+		return
+	var known: int = int(_house_generations.get(child.surname, 0))
+	if child.generation > known:
+		_house_generations[child.surname] = child.generation
+		if child.generation >= 2:
+			house_generation.emit(child.surname, child.generation)
 
 func _has_neighbour(a: SimAgent, radius: float) -> bool:
 	for other in agents:

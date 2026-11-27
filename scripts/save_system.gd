@@ -60,7 +60,7 @@ func _agents_to_data(agents: Agents) -> Array:
 		# are likewise stored for everyone (sheep keep 0, which they
 		# ignore) so a loaded world keeps its generations instead of
 		# resetting everyone to a newborn.
-		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job, "blessed": a.blessed, "sick": a.sick, "immune": a.immune, "at_war": a.at_war, "hero": a.hero, "hero_name": a.hero_name, "hero_trait": a.hero_trait, "hero_deed": a.hero_deed})
+		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job, "blessed": a.blessed, "sick": a.sick, "immune": a.immune, "at_war": a.at_war, "hero": a.hero, "hero_name": a.hero_name, "innate_trait": a.innate_trait, "hero_deed": a.hero_deed, "surname": a.surname, "generation": a.generation})
 	return out
 
 ## Berries as a flat list of [x, y, count] triples (only tiles that
@@ -145,8 +145,18 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		# none: nobody was a hero yet).
 		na.hero = bool(d.get("hero", false))
 		na.hero_name = String(d.get("hero_name", ""))
-		na.hero_trait = int(d.get("hero_trait", -1))
+		# Phase 12 — the trait is stored as "innate_trait" now (it was
+		# "hero_trait" in Phase 11, "trait" briefly in Phase 12); old
+		# saves fall back to either key.
+		na.innate_trait = int(d.get("innate_trait", d.get("trait", d.get("hero_trait", -1))))
 		na.hero_deed = String(d.get("hero_deed", ""))
+		# Phase 12 — a family surname and generation (old saves have
+		# none: they start a family of generation 1 with a random
+		# surname, the same as a freshly spawned person).
+		na.surname = String(d.get("surname", ""))
+		if na.surname == "" and kind == SimAgent.Kind.PERSON:
+			na.surname = SimAgent.SURNAMES[randi() % SimAgent.SURNAMES.size()]
+		na.generation = int(d.get("generation", 1))
 		agents.agents.append(na)
 	villages.clear_all()
 	for item in data.get("villages", []):

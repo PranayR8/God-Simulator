@@ -113,6 +113,15 @@ into a real mobile app.
   village: Strong fights 25% harder in war, Wise farmers bring in an
   extra food per cycle, Swift people walk 25% faster and breed sooner,
   Hardy people recover twice as fast and take half the winter cold.
+- **Traits & families**: the world has a memory now. Every person is
+  born with a trait (Strong, Wise, Swift, Hardy) and a family surname,
+  and a child inherits one parent's trait, their parent's surname, and
+  the next generation — so a bloodline's character passes down. A hero
+  founds a house named after their first name ("House of Mara"), and
+  the History records the line: "House of Mara, 2nd generation",
+  "House of Mara, 3rd generation". A village founded by a Strong
+  bloodline is led by a Strong hero and fights harder; one founded by
+  a Wise bloodline is led by a Wise hero and feeds better.
   Their deeds go in the History ("Perrin the Swift became a hero of
   Wilwick — founder of Wilwick"), and when a hero dies they are named
   too ("Finn the Swift of Wilwick has died") — losing a hero costs the

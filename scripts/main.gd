@@ -72,6 +72,7 @@ func _ready() -> void:
 	# History: villages and births report through signals; Main stamps
 	# the day and writes them into the log, and the HUD redraws.
 	agents.child_born.connect(_on_child_born)
+	agents.house_generation.connect(_on_house_generation)
 	agents.hero_made.connect(_on_hero_made)
 	agents.hero_died.connect(_on_hero_died)
 	agents.starved.connect(_on_starved)
@@ -434,6 +435,23 @@ func _log_power(tool: String, killed: int) -> void:
 
 func _on_child_born(village_name: String) -> void:
 	event_log.add_birth(day, village_name)
+
+## Phase 12 — a house reached a new generation: "House of Mara, 3rd
+## generation". The ordinal reads like a lineage, not a number.
+func _on_house_generation(surname: String, generation: int) -> void:
+	event_log.add(day, "House of %s, %s generation" % [surname, _ordinal(generation)])
+
+## 1st, 2nd, 3rd, 4th, 11th, 12th, 13th, 21st...
+func _ordinal(n: int) -> String:
+	if n % 100 >= 11 and n % 100 <= 13:
+		return "%dth" % n
+	if n % 10 == 1:
+		return "%dst" % n
+	if n % 10 == 2:
+		return "%dnd" % n
+	if n % 10 == 3:
+		return "%drd" % n
+	return "%dth" % n
 
 ## Phase 11 — a hero is made: name them, their village, and why.
 ## "Mara the Swift became a hero of Wilwick — blessed by the god".
