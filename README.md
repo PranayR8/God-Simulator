@@ -172,17 +172,22 @@ into a real mobile app.
   too ("Finn the Swift of Wilwick has died") — losing a hero costs the
   village its leader's boost.
   (Wilwick, Kelholt, Bramley…) that grows houses and population over time.
-  Every village owns a territory — a coloured border that grows with its
-  citizens and stops at the halfway point to its nearest neighbour, so
-  two territories meet at their border but never overlap — and every
-  person belongs to a village (a coloured ring under their feet shows
-  which one). A group that forms close to an existing village joins it
-  instead of founding a new one right next door, and any nomad who
-  comes within a few tiles of a village's border joins it too — the
-  history log shows these as "N people joined Wilwick". Citizens
-  wander inside their own border, and children are born into their
-  parent's village. Village names and citizen counts are
-  drawn on the map.
+  Every village owns a territory — a claimed set of square tiles,
+  WorldBox-style, with a blocky border that grows tile by tile as the
+  village grows, and each new tile is claimed for a reason: a hungry
+  village reaches for the forest, a village with miners reaches for
+  the mountains, a village with room to grow takes the open grass —
+  so the shape is what the village needed, and a tile belongs to one
+  village, so two territories never overlap. Every person belongs to
+  a village (a coloured ring under their feet shows which one). A
+  group that forms close to an existing village joins it instead of
+  founding a new one right next door, and any nomad who comes within
+  a few tiles of a village's border joins it too — the history log
+  shows these as "N people joined Wilwick". Citizens live near home
+  but are free to wander out and explore the world past the border,
+  then drift back — they keep their village while they are out.
+  Children are born into their parent's village. Village names and
+  citizen counts are drawn on the map.
 - **Powers**: Rain (heals scorched land, grows forest), Lightning (kills
   creatures, scorches trees), Meteor (crater, kills in a radius).
 - **Simulation**: pause/play, 1×/2×/4× speed, tick-based. The HUD shows
