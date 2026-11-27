@@ -17,6 +17,9 @@ signal zoom_in_pressed
 signal zoom_out_pressed
 signal zoom_fit_pressed
 signal banner_dismissed
+## The Inspect panel's Close button was tapped; Main clears the
+## selection (and the white ring) when this fires.
+signal inspect_closed
 
 # Tool ids — Main matches on these strings.
 const TOOL_PAINT_GRASS := "paint_grass"
@@ -32,6 +35,7 @@ const TOOL_BLESS_PERSON := "bless_person"
 const TOOL_BLESS_VILLAGE := "bless_village"
 const TOOL_FERTILE_RAIN := "fertile_rain"
 const TOOL_DISASTER := "disaster"
+const TOOL_INSPECT := "inspect"
 
 var current_tool: String = TOOL_PAINT_GRASS
 var brush_wide: bool = false
@@ -53,6 +57,9 @@ var brush_wide: bool = false
 @onready var _banner_panel: PanelContainer = $BannerPanel
 @onready var _banner_title: Label = $BannerPanel/Margin/VBox/BannerTitle
 @onready var _banner_message: Label = $BannerPanel/Margin/VBox/BannerMessage
+@onready var _inspect_panel: PanelContainer = $InspectPanel
+@onready var _inspect_title: Label = $InspectPanel/Margin/VBox/InspectTitle
+@onready var _inspect_body: Label = $InspectPanel/Margin/VBox/InspectBody
 
 ## The history panel sits top-left, below the stats bar. Collapsed it
 ## shows just the latest event; expanded it scrolls the whole log.
@@ -80,6 +87,7 @@ func _ready() -> void:
 		TOOL_BLESS_VILLAGE: $BottomBar/Margin/ToolGrid/ToolBlessVillage,
 		TOOL_FERTILE_RAIN: $BottomBar/Margin/ToolGrid/ToolFertileRain,
 		TOOL_DISASTER: $BottomBar/Margin/ToolGrid/ToolDisaster,
+		TOOL_INSPECT: $BottomBar/Margin/ToolGrid/ToolInspect,
 	}
 	# Which Power enum each blessing tool maps to, for the cooldown
 	# display (update_cooldowns greys a button out while it recharges).
@@ -101,6 +109,7 @@ func _ready() -> void:
 	$ZoomBox/ZoomFitButton.pressed.connect(func() -> void: zoom_fit_pressed.emit())
 	_log_toggle.pressed.connect(_on_log_toggle_pressed)
 	$BannerPanel/Margin/VBox/BannerButton.pressed.connect(_on_banner_button_pressed)
+	$InspectPanel/Margin/VBox/InspectClose.pressed.connect(_on_inspect_close_pressed)
 	_select_tool(TOOL_PAINT_GRASS)
 
 func update_stats(day: int, season_name: String, people: int, villages: int, animals: int) -> void:
@@ -125,6 +134,20 @@ func show_banner(title: String, message: String) -> void:
 
 func hide_banner() -> void:
 	_banner_panel.visible = false
+
+## Show the Inspect panel for a person: the title names them, the
+## body carries their stats, their items and their heritage.
+func show_inspect(title: String, body: String) -> void:
+	_inspect_title.text = title
+	_inspect_body.text = body
+	_inspect_panel.visible = true
+
+func hide_inspect() -> void:
+	_inspect_panel.visible = false
+
+func _on_inspect_close_pressed() -> void:
+	hide_inspect()
+	inspect_closed.emit()
 
 func _on_banner_button_pressed() -> void:
 	hide_banner()

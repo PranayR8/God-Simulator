@@ -140,6 +140,17 @@ into a real mobile app.
   Bronze warm timber, Iron grey stone and slate, Classical white
   marble with a column, Medieval dark stone with a steep roof — so
   you can tell the era from the rooftops.
+- **Gear & the inspect panel**: every adult carries the era they grew
+  up in — a weapon, armour and a tool in stone, bronze, iron or steel.
+  Gear is set when they come of age and kept for life, so an Iron Age
+  village holds elders with stone clubs, the middle-aged with bronze
+  swords, and the young with iron. It matters: an iron sword hits
+  harder in war, iron armour saves lives, and an iron hoe brings in
+  a quarter again the food. Tap the Inspect tool, then tap any
+  villager, and their panel opens — their age, health, hunger, job
+  and trait; their weapon, armour and tool; and their heritage, the
+  house they belong to and the generation they are — with a white
+  ring marking who you picked.
   Their deeds go in the History ("Perrin the Swift became a hero of
   Wilwick — founder of Wilwick"), and when a hero dies they are named
   too ("Finn the Swift of Wilwick has died") — losing a hero costs the

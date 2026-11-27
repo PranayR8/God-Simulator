@@ -232,8 +232,17 @@ func _resolve_war(wi: int) -> void:
 	var attacker: Villages.VillageData = villages.villages[ai]
 	var defender: Villages.VillageData = villages.villages[di]
 	var party := _party_for(war_id)
-	var attacker_force := float(party.size())
-	var defender_force := float(villages.adults_of(defender)) * 0.5
+	# Phase 16 — a fighter counts for their weapon's edge: a raiding
+	# party of iron swords hits harder than the same count of stone
+	# clubs, and a village's defenders count the same way (halved,
+	# as before — the defenders are not all at the gate).
+	var attacker_force := agents.weapon_force(party)
+	var defender_adults := agents.adults_of_village(di)
+	var defender_force := agents.weapon_force(defender_adults) * 0.5
+	# Phase 16 — armour saves lives: each side's deaths are cut by
+	# its average armour protection (bronze 10%, iron 20%, steel 30%).
+	var raider_protect := agents.avg_armor_protection(party)
+	var defender_protect := agents.avg_armor_protection(defender_adults)
 	var walled := villages.stage_of(defender) >= 2
 	if walled:
 		defender_force *= WALL_BONUS
@@ -252,8 +261,8 @@ func _resolve_war(wi: int) -> void:
 	winner.food += loot
 	if attacker_wins:
 		var leader := agents.leader_of(ai)
-		_kill_defenders(di, maxi(1, int(defender_force * LOSER_DEATH_FRACTION)))
-		_kill_raiders(war_id, maxi(1, int(attacker_force * WINNER_DEATH_FRACTION)))
+		_kill_defenders(di, maxi(1, int(defender_force * LOSER_DEATH_FRACTION * (1.0 - defender_protect))))
+		_kill_raiders(war_id, maxi(1, int(attacker_force * WINNER_DEATH_FRACTION * (1.0 - raider_protect))))
 		event_log.add(current_day, "%s defeated %s in battle, taking %d food!" % [attacker.name, defender.name, int(loot)])
 		# Phase 11 — a hero who led their village to victory is named
 		# in the log (only if they lived to tell it).
@@ -261,8 +270,8 @@ func _resolve_war(wi: int) -> void:
 			event_log.add(current_day, "%s led %s to victory over %s." % [leader.hero_title(), attacker.name, defender.name])
 	else:
 		var leader := agents.leader_of(di)
-		_kill_raiders(war_id, maxi(1, int(attacker_force * LOSER_DEATH_FRACTION)))
-		_kill_defenders(di, maxi(1, int(defender_force * WINNER_DEATH_FRACTION)))
+		_kill_raiders(war_id, maxi(1, int(attacker_force * LOSER_DEATH_FRACTION * (1.0 - raider_protect))))
+		_kill_defenders(di, maxi(1, int(defender_force * WINNER_DEATH_FRACTION * (1.0 - defender_protect))))
 		event_log.add(current_day, "%s repelled %s's raid — the raiders were driven off!" % [defender.name, attacker.name])
 		if leader != null and agents.agents.has(leader):
 			event_log.add(current_day, "%s held %s against %s's raid." % [leader.hero_title(), defender.name, attacker.name])

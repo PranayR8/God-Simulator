@@ -99,6 +99,7 @@ func _ready() -> void:
 	hud.save_pressed.connect(_on_save_pressed)
 	hud.new_world_pressed.connect(_on_new_world_pressed)
 	hud.banner_dismissed.connect(_on_banner_dismissed)
+	hud.inspect_closed.connect(_on_inspect_closed)
 	hud.zoom_in_pressed.connect(func() -> void: _zoom_by(1.25))
 	hud.zoom_out_pressed.connect(func() -> void: _zoom_by(0.8))
 	hud.zoom_fit_pressed.connect(_fit_camera)
@@ -168,6 +169,7 @@ func _do_tick() -> void:
 	wars.tick(day)  # raids, marches, battles, and their outcomes
 	goals.tick(day)  # eras, achievements, and the scenario
 	villages.era = goals.era  # Phase 15 — the houses redraw in the era's style
+	agents.era = goals.era  # Phase 16 — new adults are equipped in the era's material
 	if total_ticks % 40 == 0:
 		_save_quietly()  # autosave every 40 ticks (~10s at 1x)
 	_update_hud()
@@ -383,6 +385,69 @@ func _apply_tool_at_screen(screen_pos: Vector2, is_start: bool) -> void:
 			if is_start:
 				_apply_disaster(tile)
 				_update_hud()
+		Hud.TOOL_INSPECT:
+			# Inspect is one deliberate tap each, never a drag: tap a
+			# person and their panel opens (stats, items, heritage).
+			if is_start:
+				_inspect_at_screen(screen_pos)
+
+## Phase 16 — inspect the person nearest the tap (within a tile):
+## select them (a white ring marks them) and open their panel. A tap
+## on empty ground just says so in the hint line.
+func _inspect_at_screen(screen_pos: Vector2) -> void:
+	var canvas_xform := get_viewport().get_canvas_transform()
+	var world_pos: Vector2 = canvas_xform.affine_inverse() * screen_pos
+	var person := agents.nearest_person(world_pos, 24.0)
+	if person == null:
+		hud.set_hint("Nobody there — tap a villager to see who they are.")
+		return
+	agents.selected = person
+	agents.queue_redraw()
+	var title := ""
+	if person.hero:
+		title = person.hero_title()
+	else:
+		var home := ""
+		if person.village >= 0 and person.village < villages.villages.size():
+			home = villages.villages[person.village].name
+		title = "A villager of %s" % home if home != "" else "A wanderer"
+	hud.show_inspect(title, _inspect_text(person))
+
+## The inspect panel's text: stats, items, heritage — one section
+## each, so a person reads as a person, not a row of numbers.
+func _inspect_text(a: SimAgent) -> String:
+	var home := ""
+	if a.village >= 0 and a.village < villages.villages.size():
+		home = villages.villages[a.village].name
+	var age_days := int(a.age / 120.0)
+	var job_name := "None"
+	if a.job >= 0:
+		job_name = SimAgent.JOB_NAMES[a.job]
+	var lines: Array[String] = []
+	lines.append("Stats")
+	lines.append("Age: %d days · Health: %d · Hunger: %d" % [age_days, int(a.health), int(a.hunger)])
+	lines.append("Job: %s · Village: %s" % [job_name, home if home != "" else "None"])
+	lines.append("Trait: %s" % SimAgent.HERO_TRAIT_NAMES[a.innate_trait])
+	lines.append("")
+	lines.append("Items")
+	lines.append("Weapon: %s" % a.weapon_name())
+	lines.append("Armour: %s" % a.armor_name())
+	lines.append("Tool: %s" % a.tool_name())
+	lines.append("")
+	lines.append("Heritage")
+	lines.append("House of %s · %s generation" % [a.surname, _ordinal(a.generation)])
+	if a.hero:
+		lines.append("Hero of %s — %s" % [home, a.hero_title()])
+	else:
+		lines.append("No hero's name yet — heroes are made, not born.")
+	return "\n".join(lines)
+
+## The Inspect panel closed: the selection STAYS (and so does the
+## white ring) — the ring is how you see who you just inspected,
+## and the panel covered them while it was open. It clears when you
+## tap another person with Inspect, or pick a different tool.
+func _on_inspect_closed() -> void:
+	pass
 
 # Phase 9 — unleash a disaster where the player tapped: a random
 # disaster (plague, drought, or wildfire) starts there. -1 means the
@@ -606,6 +671,11 @@ func _tool_power() -> int:
 # --- HUD callbacks ---------------------------------------------------------
 
 func _on_tool_selected(tool: String) -> void:
+	# Leaving Inspect clears the selection (and its ring) — the ring
+	# belongs to the Inspect tool.
+	if tool != Hud.TOOL_INSPECT and agents.selected != null:
+		agents.selected = null
+		agents.queue_redraw()
 	current_tool = tool
 	hud.set_hint(_hint_for_tool(tool))
 

@@ -61,7 +61,7 @@ func _agents_to_data(agents: Agents) -> Array:
 		# are likewise stored for everyone (sheep keep 0, which they
 		# ignore) so a loaded world keeps its generations instead of
 		# resetting everyone to a newborn.
-		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job, "blessed": a.blessed, "sick": a.sick, "immune": a.immune, "at_war": a.at_war, "hero": a.hero, "hero_name": a.hero_name, "innate_trait": a.innate_trait, "hero_deed": a.hero_deed, "surname": a.surname, "generation": a.generation})
+		out.append({"kind": a.kind, "x": a.pos.x, "y": a.pos.y, "hunger": a.hunger, "health": a.health, "age": a.age, "lifespan": a.lifespan, "job": a.job, "blessed": a.blessed, "sick": a.sick, "immune": a.immune, "at_war": a.at_war, "hero": a.hero, "hero_name": a.hero_name, "innate_trait": a.innate_trait, "hero_deed": a.hero_deed, "surname": a.surname, "generation": a.generation, "weapon_tier": a.weapon_tier, "armor_tier": a.armor_tier, "tool_tier": a.tool_tier})
 	return out
 
 ## Berries as a flat list of [x, y, count] triples (only tiles that
@@ -169,6 +169,9 @@ func apply_save(data: Dictionary, world: GodSimWorld, agents: Agents, villages: 
 		# Phase 12 — a family surname and generation (old saves have
 		# none: they start a family of generation 1 with a random
 		# surname, the same as a freshly spawned person).
+		na.weapon_tier = int(d.get("weapon_tier", 0))
+		na.armor_tier = int(d.get("armor_tier", 0))
+		na.tool_tier = int(d.get("tool_tier", 0))
 		na.surname = String(d.get("surname", ""))
 		if na.surname == "" and kind == SimAgent.Kind.PERSON:
 			na.surname = SimAgent.SURNAMES[randi() % SimAgent.SURNAMES.size()]

@@ -68,6 +68,13 @@ const PLAGUE_SPREAD_CHANCE := 0.002
 var agents: Array[SimAgent] = []
 var world: GodSimWorld = null
 var villages: Villages = null  # set by Main; used to keep citizens near home
+## Phase 16 — the current era (set by Main each tick from Goals).
+## New adults are equipped in the era's material.
+var era: int = 0
+## Phase 16 — the person the player is inspecting (set by Main).
+## The selected person wears a white ring, so you can see who the
+## panel is about.
+var selected: SimAgent = null
 
 ## Phase 12 — the highest generation born so far in each house
 ## (surname -> generation). A house's milestone is logged once, when
@@ -255,6 +262,14 @@ func tick(dt: float, p_season: int, p_day: int) -> void:
 	while i < agents.size():
 		var a := agents[i]
 		a.age += 1.0
+		# Phase 16 — a person who has come of age and carries no gear
+		# is equipped in the era's material. Gear is set once and
+		# kept for life, so a village holds a mix of eras: elders with
+		# stone, the middle-aged with bronze, the young with iron.
+		# (This also equips the adults of an old save, who were born
+		# before gear existed.)
+		if a.kind == SimAgent.Kind.PERSON and not a.is_child() and a.weapon_tier == SimAgent.GEAR_NONE:
+			_equip_from_era(a)
 		a.breed_cooldown = maxf(0.0, a.breed_cooldown - 1.0)
 		if a.kind == SimAgent.Kind.PERSON:
 			if _update_hunger(a):
@@ -280,6 +295,44 @@ func tick(dt: float, p_season: int, p_day: int) -> void:
 	_try_breed()
 	_spread_plague()
 	queue_redraw()
+
+## Equip a person in the current era's material (all three pieces
+## the same tier — the era they came of age in).
+func _equip_from_era(a: SimAgent) -> void:
+	var tier: int = SimAgent.ERA_GEAR[clampi(era, 0, SimAgent.ERA_GEAR.size() - 1)]
+	a.weapon_tier = tier
+	a.armor_tier = tier
+	a.tool_tier = tier
+
+## The fighting strength of a list of fighters: each one counts for
+## their weapon's edge (a steel sword is worth half again a stone
+## club). Used for both sides of a war.
+func weapon_force(fighters: Array) -> float:
+	var force := 0.0
+	for f in fighters:
+		var a: SimAgent = f
+		force += SimAgent.GEAR_WEAPON_MULT[clampi(a.weapon_tier, 0, SimAgent.GEAR_WEAPON_MULT.size() - 1)]
+	return force
+
+## The average armour protection of a list of fighters (the share of
+## deaths their armour prevents). 0 when the list is empty.
+func avg_armor_protection(fighters: Array) -> float:
+	if fighters.is_empty():
+		return 0.0
+	var total := 0.0
+	for f in fighters:
+		var a: SimAgent = f
+		total += SimAgent.GEAR_ARMOR_PROTECT[clampi(a.armor_tier, 0, SimAgent.GEAR_ARMOR_PROTECT.size() - 1)]
+	return total / float(fighters.size())
+
+## The adult citizens of a village who are at home (not away at
+## war) — the defenders in a battle.
+func adults_of_village(village_idx: int) -> Array:
+	var out: Array = []
+	for a in agents:
+		if a.kind == SimAgent.Kind.PERSON and a.village == village_idx and not a.is_child() and a.at_war < 0:
+			out.append(a)
+	return out
 
 ## A citizen's work. Farmers harvest food into the village store (one
 ## unit per 15 ticks — 8 a day — where there's forest to farm in the
@@ -324,6 +377,9 @@ func _do_job(a: SimAgent) -> void:
 			# village breeds (only the well-fed breed).
 			if _leader_trait_for(a) == SimAgent.HERO_TRAIT_WISE:
 				gain += SimAgent.HERO_WISE_FARMER_BONUS
+			# Phase 16 — a better tool harvests more: an iron hoe
+			# brings in a quarter again what a stone hoe does.
+			gain *= SimAgent.GEAR_TOOL_MULT[clampi(a.tool_tier, 0, SimAgent.GEAR_TOOL_MULT.size() - 1)]
 			v.food += gain
 	elif a.job == SimAgent.JOB_WOODCUTTER:
 		a.job_timer = 120.0
@@ -331,7 +387,8 @@ func _do_job(a: SimAgent) -> void:
 		if t.x >= 0:
 			world.set_terrain(t.x, t.y, GodSimWorld.Terrain.GRASS)
 			# Phase 6: felling a tile yields timber for the store.
-			v.wood += Villages.WOOD_PER_TILE
+			# Phase 16 — a better axe fells more per tile.
+			v.wood += Villages.WOOD_PER_TILE * SimAgent.GEAR_TOOL_MULT[clampi(a.tool_tier, 0, SimAgent.GEAR_TOOL_MULT.size() - 1)]
 	elif a.job == SimAgent.JOB_MINER:
 		a.job_timer = 120.0
 		# Phase 15 — a miner works the nearest mountain in the
@@ -343,15 +400,17 @@ func _do_job(a: SimAgent) -> void:
 		if t.x >= 0:
 			var res := world.mountain_resource_at(t.x, t.y)
 			world.set_terrain(t.x, t.y, GodSimWorld.Terrain.GRASS)
+			# Phase 16 — a better pick pulls more from the mountain.
+			var haul: float = 1.0 * SimAgent.GEAR_TOOL_MULT[clampi(a.tool_tier, 0, SimAgent.GEAR_TOOL_MULT.size() - 1)]
 			match res:
 				GodSimWorld.RES_STONE:
-					v.stone += 1.0
+					v.stone += haul
 				GodSimWorld.RES_IRON:
-					v.iron += 1.0
+					v.iron += haul
 				GodSimWorld.RES_MARBLE:
-					v.marble += 1.0
+					v.marble += haul
 				GodSimWorld.RES_STEEL:
-					v.steel += 1.0
+					v.steel += haul
 
 ## Is there any forest to farm in the inner half of the territory?
 ## A farmer only produces food where there's land to farm — a village
@@ -887,6 +946,10 @@ func _draw() -> void:
 func _draw_person(a: SimAgent) -> void:
 	var bob := sin(a.age * 0.9) * 1.0
 	var p := a.pos + Vector2(0, bob)
+	# Phase 16 — the person the player is inspecting wears a white
+	# ring, so you can see at a glance who the panel is about.
+	if a == selected:
+		draw_arc(p + Vector2(0, 8), 11.0, 0, TAU, 24, Color.WHITE, 2.5)
 	# Phase 8 — a blessed person stands out: a golden glow and a gold
 	# ring around them, drawn behind the figure. The glow is strong
 	# enough to spot at fit zoom — a blessed person should read as

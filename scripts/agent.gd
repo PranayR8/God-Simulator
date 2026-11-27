@@ -64,6 +64,71 @@ const JOB_COLORS := [Color("#27ae60"), Color("#8b5a2b"), Color("#7f8c8d"), Color
 var job: int = JOB_NONE
 var job_timer: float = 0.0
 
+## Phase 16 — gear. A person's armour, weapon and tool, each in the
+## material of the era they came of age in (Stone, Bronze, Iron,
+## Steel). Gear is set once, when a person becomes an adult, and kept
+## for life — so a village in the Iron Age holds a mix: elders with
+## stone gear from the Stone Age, the middle-aged with bronze, the
+## young with iron. Children carry no gear. The tiers are indexes
+## into GEAR_NAMES and the multiplier tables below.
+const GEAR_NONE := 0
+const GEAR_STONE := 1
+const GEAR_BRONZE := 2
+const GEAR_IRON := 3
+const GEAR_STEEL := 4
+const GEAR_NAMES := ["", "Stone", "Bronze", "Iron", "Steel"]
+## The gear an era equips its new adults with (indexed by era).
+## Classical keeps iron — the classical world was an iron world;
+## marble is for its buildings, not its blades.
+const ERA_GEAR := [GEAR_STONE, GEAR_BRONZE, GEAR_IRON, GEAR_IRON, GEAR_STEEL]
+## A weapon's edge in war (multiplies a fighter's strength).
+const GEAR_WEAPON_MULT := [1.0, 1.0, 1.15, 1.3, 1.5]
+## Armour's protection in war (the share of deaths it prevents).
+const GEAR_ARMOR_PROTECT := [0.0, 0.0, 0.1, 0.2, 0.3]
+## A tool's edge at work (multiplies a worker's output).
+const GEAR_TOOL_MULT := [1.0, 1.0, 1.1, 1.25, 1.5]
+var weapon_tier: int = GEAR_NONE
+var armor_tier: int = GEAR_NONE
+var tool_tier: int = GEAR_NONE
+
+## The gear's names, for the inspect panel. A tool is named by the
+## job it serves (a hoe, an axe, a pick, a hammer); a weapon and
+## armour by their material.
+func weapon_name() -> String:
+	if weapon_tier <= GEAR_NONE:
+		return "No weapon"
+	match weapon_tier:
+		GEAR_STONE:
+			return "Stone club"
+		GEAR_BRONZE:
+			return "Bronze sword"
+		GEAR_IRON:
+			return "Iron sword"
+		_:
+			return "Steel sword"
+
+func armor_name() -> String:
+	if armor_tier <= GEAR_NONE:
+		return "No armour"
+	if armor_tier == GEAR_STONE:
+		return "Hide armour"
+	return "%s armour" % GEAR_NAMES[armor_tier]
+
+func tool_name() -> String:
+	if tool_tier <= GEAR_NONE:
+		return "No tool"
+	var kind := "tool"
+	match job:
+		JOB_FARMER:
+			kind = "hoe"
+		JOB_WOODCUTTER:
+			kind = "axe"
+		JOB_BUILDER:
+			kind = "hammer"
+		JOB_MINER:
+			kind = "pick"
+	return "%s %s" % [GEAR_NAMES[tool_tier], kind]
+
 var village: int = -1  # index into Villages.villages; -1 = no village yet (a nomad)
 
 ## Blessings (Phase 8). A blessed person is marked by the god: they walk
